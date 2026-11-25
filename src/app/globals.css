@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Components use the Tailwind names from @theme below
+ * (bg-surface, text-ink, border-line, bg-accent ...), never raw hex values,
+ * so light and dark stay in step.
+ */
+:root {
+  --bg: #faf8f5; /* warm paper */
+  --surface: #ffffff;
+  --surface-sunken: #f1eeea;
+  --ink: #1c1917;
+  --muted: #6f6a64;
+  --line: #e7e3de;
+  --accent: #d9481f; /* fired clay */
+  --accent-hover: #bf3d18;
+  --accent-ink: #ffffff;
+  --accent-soft: #fcebe4;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --success: #1f7a4d;
+  --ring: #1c1917;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121110;
+    --surface: #1c1b19;
+    --surface-sunken: #0c0b0a;
+    --ink: #f5f4f2;
+    --muted: #a8a29e;
+    --line: #2e2b28;
+    --accent: #ff6b42;
+    --accent-hover: #ff8563;
+    --accent-ink: #1a0d08;
+    --accent-soft: #33190f;
+    --danger: #ff8a7a;
+    --danger-soft: #3a1512;
+    --success: #5fd39a;
+    --ring: #f5f4f2;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
+
+  /* Height of the fixed bottom tab bar, excluding the device safe area. */
+  --spacing-tabbar: 4rem;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* Stop the page behind an installed PWA from rubber-banding. */
+  overscroll-behavior-y: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
