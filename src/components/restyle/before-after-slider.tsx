@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
 import { ChevronsLeftRight } from 'lucide-react'
 
 interface Image {
@@ -18,14 +18,35 @@ export function BeforeAfterSlider({
   before,
   after,
   initial = 50,
+  autoplay = false,
+  beforeAlt = 'Before',
+  afterAlt = 'After',
 }: {
   before: Image
   after: Image
   initial?: number
+  /** Sweep back and forth on its own until someone touches it (never with reduced motion). */
+  autoplay?: boolean
+  beforeAlt?: string
+  afterAlt?: string
 }) {
   const frame = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState(initial)
   const dragging = useRef(false)
+  const [playing, setPlaying] = useState(autoplay)
+
+  useEffect(() => {
+    if (!playing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    let frameId = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      // A slow ease between 15% and 85%, starting from the middle.
+      setPosition(50 + 35 * Math.sin(((now - start) / 4200) * 2 * Math.PI))
+      frameId = requestAnimationFrame(tick)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [playing])
 
   const moveTo = useCallback((clientX: number) => {
     const box = frame.current?.getBoundingClientRect()
@@ -34,6 +55,7 @@ export function BeforeAfterSlider({
   }, [])
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
+    setPlaying(false)
     dragging.current = true
     event.currentTarget.setPointerCapture(event.pointerId)
     moveTo(event.clientX)
@@ -52,7 +74,7 @@ export function BeforeAfterSlider({
       {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL */}
       <img
         src={after.url}
-        alt="After"
+        alt={afterAlt}
         draggable={false}
         className="absolute inset-0 h-full w-full object-cover"
       />
@@ -60,7 +82,7 @@ export function BeforeAfterSlider({
         {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL */}
         <img
           src={before.url}
-          alt="Before"
+          alt={beforeAlt}
           draggable={false}
           className="absolute inset-0 h-full w-full object-cover"
         />
@@ -89,7 +111,11 @@ export function BeforeAfterSlider({
         max={100}
         step={1}
         value={Math.round(position)}
-        onChange={(event) => setPosition(Number(event.target.value))}
+        onChange={(event) => {
+          setPlaying(false)
+          setPosition(Number(event.target.value))
+        }}
+        onFocus={() => setPlaying(false)}
         aria-label="Compare before and after"
         aria-valuetext={`${Math.round(position)}% before`}
         className="peer absolute inset-0 h-full w-full cursor-ew-resize opacity-0"

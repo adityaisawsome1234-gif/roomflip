@@ -35,8 +35,11 @@ export async function GET(request: Request) {
   for (const userId of new Set((annual ?? []).map((row) => row.user_id))) {
     planCredits += await grantDuePlanCredits(userId)
   }
+  // Old rate-limit windows are no longer needed.
+  const { data: cleared } = await createAdminClient().rpc('rate_limit_cleanup')
+
   return Response.json(
-    { refreshed, timedOut: failed.length, planCredits },
+    { refreshed, timedOut: failed.length, planCredits, rateLimitRowsCleared: cleared ?? 0 },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

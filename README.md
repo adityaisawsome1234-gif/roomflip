@@ -8,16 +8,16 @@ text in `supabase/templates/sign_in.html`.
 
 ## Build status
 
-| #   | Milestone                                                     | Status      |
-| --- | ------------------------------------------------------------- | ----------- |
-| 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done        |
-| 2   | Credits ledger                                                | Done        |
-| 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done        |
-| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done        |
-| 5   | Export Reel and square before/after image                     | Done        |
-| 6   | Stripe checkout, portal, webhooks, paywall                    | Done        |
-| 7   | Analytics, admin page, rate limits                            | Done        |
-| 8   | Landing page, deployment                                      | Not started |
+| #   | Milestone                                                     | Status |
+| --- | ------------------------------------------------------------- | ------ |
+| 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done   |
+| 2   | Credits ledger                                                | Done   |
+| 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done   |
+| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done   |
+| 5   | Export Reel and square before/after image                     | Done   |
+| 6   | Stripe checkout, portal, webhooks, paywall                    | Done   |
+| 7   | Analytics, admin page, rate limits                            | Done   |
+| 8   | Landing page, deployment                                      | Done   |
 
 ## Stack
 
@@ -316,10 +316,80 @@ To change the catalog, edit the JSON and generate a new migration:
 node scripts/build-paint-migration.mjs 20270101000000_paint_colors_update.sql
 ```
 
+## Landing page
+
+`/` is a static page (prerendered, instant): a hero with an auto-playing before/after (it holds
+still for people who prefer reduced motion), how it works, three example transformations, the
+three ways to restyle, pricing straight from `src/lib/config/pricing.ts`, and an FAQ.
+
+The examples start as flat illustrations drawn by `scripts/generate-example-art.mjs`, and the page
+says so. To show real results, make pairs of real rooms with `/dev/compare`, save them over the
+files in `public/examples/` (same names, 4:3), update the captions in
+`src/lib/config/examples.ts` and set `illustration: false`. Rerun the script's last step, or replace
+`src/app/opengraph-image.jpg`, for the image shown when the link is shared.
+
 ## Deployment
 
-Deployment to Vercel with a hosted Supabase project is set up in milestone 8, and this section will
-carry the full steps. In outline: create a Supabase project and push the migrations
-(`npx supabase link`, `npx supabase db push`), set the sign-in email template and redirect URLs in
-the Supabase dashboard, create the Vercel project from this repository, and add the variables from
-`.env.example`.
+Vercel for the app, a hosted Supabase project for auth, database and storage. Both have free
+plans; Vercel's Hobby plan does not allow commercial use, so move to Pro before launch.
+
+### 1. Supabase
+
+1. Create a project (same region as your Vercel functions; `us-east-1` pairs with Vercel's
+   default `iad1`).
+2. Apply the migrations, in order, from `supabase/migrations/`. With the CLI:
+
+   ```bash
+   npx supabase link --project-ref <project-ref>
+   ```
+
+   ```bash
+   npx supabase db push
+   ```
+
+3. **Authentication, URL configuration:** Site URL `https://<your domain>`; redirect URLs
+   `https://<your domain>/**` and, for Vercel previews, `https://*-<team>.vercel.app/**`.
+4. **Authentication, email templates:** paste `supabase/templates/sign_in.html` into both
+   "Magic link" and "Confirm signup", with the subject "Your RoomFlip sign-in link". The template
+   carries the link and the 6-digit code.
+5. **Authentication, SMTP: required before launch.** Supabase's built-in email only delivers to
+   members of your Supabase organisation and is heavily rate limited, so real users could not
+   sign in. Connect a provider such as Resend (its free tier covers 3,000 emails a month) or
+   Postmark, with a sending domain you own.
+6. **Google sign-in (optional):** create an OAuth client in Google Cloud with the redirect URI
+   `https://<project-ref>.supabase.co/auth/v1/callback`, enable the Google provider with its id
+   and secret, then set `NEXT_PUBLIC_AUTH_GOOGLE_ENABLED=true` in Vercel.
+7. Copy the project URL, the publishable key and the secret key (Project Settings, API keys).
+
+### 2. Vercel
+
+1. Import this GitHub repository as a new project (framework: Next.js; no other build settings).
+2. Add every variable from `.env.example` for Production (and Preview if you want working
+   previews). Leave `STRIPE_API_BASE` and `RATE_LIMIT_EXEMPT_IPS` blank. Generate `CRON_SECRET`
+   with `openssl rand -hex 32`; Vercel sends it to the cron route automatically.
+3. Set `NEXT_PUBLIC_SITE_URL` to the production URL, and add the domain.
+4. Deploy. `vercel.json` schedules the daily sweeper; on Vercel Pro, change it to every five
+   minutes (`*/5 * * * *`).
+
+### 3. Services
+
+- **fal.ai:** `FAL_KEY`. Webhooks need no setup: each job carries its own callback URL.
+- **OpenAI:** `OPENAI_API_KEY` (moderation only, free). Production refuses uploads without it.
+- **Stripe:** follow "Setting up Stripe" above: prices, webhook endpoint, customer portal.
+- **PostHog:** `POSTHOG_API_KEY` and `POSTHOG_HOST`.
+
+### 4. Smoke test after each deploy
+
+1. Sign in with a real address, both by link and by code.
+2. Upload a photo, run one style, one paint and one material render; check each finishes.
+3. Save one, export a reel and a square image, and play the reel on a phone.
+4. Use up the free renders and check the paywall opens over the last result.
+5. Buy a pack with Stripe's test card `4242 4242 4242 4242` and check the credits arrive.
+6. Open `/admin` with an address in `ADMIN_EMAILS` and check the numbers.
+
+### Not built yet
+
+- A privacy policy and terms page (app stores and many payment reviews expect them).
+- A Content-Security-Policy header (it needs a per-request nonce through the proxy).
+- Error monitoring such as Sentry.
+- Real before/after examples on the landing page (see above).
