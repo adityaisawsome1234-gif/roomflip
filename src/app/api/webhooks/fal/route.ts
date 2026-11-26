@@ -14,7 +14,8 @@ export const maxDuration = 60
  */
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer())
-  if (!(await verifyFalWebhook(raw, webhookHeaders(request.headers)))) {
+  const headers = webhookHeaders(request.headers)
+  if (!(await verifyFalWebhook(raw, headers))) {
     return new Response('invalid signature', { status: 401 })
   }
 
@@ -26,6 +27,10 @@ export async function POST(request: Request) {
   }
   const event = parseFalWebhook(body)
   if (!event) return new Response('ignored', { status: 200 })
+  // The signature covers the header's request id; the body must be about the same request.
+  if (event.requestId !== headers.requestId) {
+    return new Response('request id mismatch', { status: 400 })
+  }
 
   try {
     await handleProviderResult('fal', event.requestId, event.state)

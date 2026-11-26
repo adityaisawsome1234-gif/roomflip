@@ -14,7 +14,9 @@ import { ProviderError, type EditRequest, type ImageEditProvider, type JobState 
  */
 
 const QUEUE_BASE = 'https://queue.fal.run'
-const TIMEOUT_MS = 20_000
+/** Two submit attempts plus the rest of the request must fit inside the route's time limit. */
+const SUBMIT_TIMEOUT_MS = 12_000
+const CHECK_TIMEOUT_MS = 15_000
 
 /** fal error types that are infrastructure trouble, worth one retry. */
 const RETRYABLE_ERROR_TYPES = new Set([
@@ -146,7 +148,7 @@ export const falProvider: ImageEditProvider = {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify(falInput(model, request)),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(SUBMIT_TIMEOUT_MS),
       })
     } catch (error) {
       throw new ProviderError(`fal submit failed: ${(error as Error).message}`, true)
@@ -167,7 +169,7 @@ export const falProvider: ImageEditProvider = {
     try {
       statusResponse = await fetch(`${base}/status`, {
         headers: headers(),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       })
     } catch {
       // Could not reach fal: say nothing has changed and let the next poll retry.
@@ -190,7 +192,7 @@ export const falProvider: ImageEditProvider = {
     try {
       resultResponse = await fetch(base, {
         headers: headers(),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       })
     } catch {
       return { state: 'pending' }

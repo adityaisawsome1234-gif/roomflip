@@ -1,6 +1,7 @@
 import 'server-only'
 
 import sharp from 'sharp'
+import { publicEnv } from '@/lib/env'
 import { ProviderError, type ImageEditProvider } from './types'
 
 /**
@@ -37,8 +38,14 @@ function behaviorOf(prompt: string): Behavior {
   return 'ok'
 }
 
-/** Flaky jobs fail on their first attempt only. Resubmissions get a fresh id with b='ok'. */
-const flakyAttempts = new Set<string>()
+/**
+ * Flaky jobs fail on their first attempt only. Kept on globalThis because the
+ * dev server can load a separate copy of this module for each route, and the
+ * first attempt (POST /api/renders) and the retry (a poll) run in different routes.
+ */
+const flakyAttempts: Set<string> = ((
+  globalThis as { __mockFlakyAttempts?: Set<string> }
+).__mockFlakyAttempts ??= new Set<string>())
 
 export const mockProvider: ImageEditProvider = {
   async submit(model, request) {
@@ -77,6 +84,10 @@ export const mockProvider: ImageEditProvider = {
       }
     }
 
+    // The request id is client-visible in the dev tools: only fetch from our own storage.
+    if (new URL(job.u).origin !== new URL(publicEnv.supabaseUrl).origin) {
+      return { state: 'failed', code: 'not_found', message: 'Unknown mock job.', retryable: false }
+    }
     const source = await fetch(job.u)
     if (!source.ok) {
       return {

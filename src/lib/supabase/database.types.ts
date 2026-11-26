@@ -345,6 +345,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_render_check: {
+        Args: { p_interval_ms: number; p_render_id: string; p_request_id: string }
+        Returns: boolean
+      }
+      claim_render_submission: {
+        Args: {
+          p_expected_request_id: string
+          p_max_attempts: number
+          p_render_id: string
+          p_stale_seconds: number
+        }
+        Returns: boolean
+      }
       complete_render: {
         Args: {
           p_render_id: string
@@ -399,7 +412,7 @@ export type Database = {
           refunded: number
         }[]
       }
-      fail_stale_renders: { Args: { p_limit?: number }; Returns: string[] }
+      fail_stale_render: { Args: { p_render_id: string }; Returns: boolean }
       grant_credits: {
         Args: {
           p_amount: number
@@ -412,6 +425,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_stale_renders: { Args: { p_limit?: number }; Returns: string[] }
       mark_render_submitted: {
         Args: { p_provider_endpoint: string; p_provider_request_id: string; p_render_id: string }
         Returns: boolean

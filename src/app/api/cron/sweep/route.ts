@@ -20,8 +20,9 @@ function authorized(request: Request): boolean {
  */
 export async function GET(request: Request) {
   if (!authorized(request)) return new Response('unauthorized', { status: 401 })
-  const refreshed = await refreshNeglectedRenders(50)
+  // Refunds first: they are quick and must not wait behind slow provider checks.
   const failed = await failStaleRenders(500)
+  const refreshed = await refreshNeglectedRenders(50)
   return Response.json(
     { refreshed, timedOut: failed.length },
     { headers: { 'Cache-Control': 'no-store' } },

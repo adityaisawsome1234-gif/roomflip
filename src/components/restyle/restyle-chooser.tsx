@@ -43,7 +43,9 @@ export function RestyleChooser({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [outOfCredits, setOutOfCredits] = useState(balance < CREDITS.cost.preview)
-  const requestId = useRef<string | null>(null)
+  // One request id per intended render: reused while retrying the same choice
+  // after an uncertain failure, replaced when the choice changes.
+  const pending = useRef<{ key: string; id: string } | null>(null)
 
   function currentChoice(): RestyleChoice | string {
     if (tab === 'style') {
@@ -70,17 +72,18 @@ export function RestyleChooser({
     }
     setError(null)
     setSubmitting(true)
-    requestId.current ??= crypto.randomUUID()
-    const result = await startRender({ tier: 'preview', roomId, choice }, requestId.current)
+    const key = JSON.stringify(choice)
+    if (pending.current?.key !== key) pending.current = { key, id: crypto.randomUUID() }
+    const result = await startRender({ tier: 'preview', roomId, choice }, pending.current.id)
     if (result.ok) {
-      requestId.current = null
+      pending.current = null
       router.push(`/app/render/${result.renderId}`)
       return
     }
-    // A failed attempt may be retried with the same id; a new choice gets a new one.
-    if (!result.ok && result.outOfCredits) setOutOfCredits(true)
+    // Keep the id after an uncertain failure, so tapping again cannot charge twice.
+    if (result.definite) pending.current = null
+    if (result.outOfCredits) setOutOfCredits(true)
     else setError(result.message)
-    requestId.current = null
     setSubmitting(false)
   }
 

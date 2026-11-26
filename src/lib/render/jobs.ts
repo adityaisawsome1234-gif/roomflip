@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { getModel, isModelId, resolveTierModel, type ModelSpec } from '@/lib/config/models'
 import { ENTITLEMENTS, type RenderTier } from '@/lib/config/pricing'
@@ -34,6 +35,11 @@ type RenderRow = Database['public']['Tables']['renders']['Row']
 const MAX_ATTEMPTS = 2
 /** A retry is only worth starting if this much time is left before the deadline. */
 const MIN_SECONDS_FOR_RETRY = 45
+/**
+ * A submission claim older than this is presumed dead (its request crashed),
+ * so another caller may take over. Longer than the longest possible submit.
+ */
+const SUBMIT_CLAIM_STALE_SECONDS = 60
 /** How long the provider has to fetch the input images. Longer than any deadline. */
 const INPUT_URL_TTL_SECONDS = 60 * 60
 /** Polling the provider more often than this does not help. */
@@ -200,6 +206,7 @@ export async function requestRender(
         .select('path')
         .eq('id', swatchId ?? '')
         .eq('user_id', userId)
+        .is('deleted_at', null)
         .maybeSingle()
       if (!swatch)
         throw new RenderError(404, 'swatch_not_found', 'That sample photo was not found.')
@@ -264,6 +271,8 @@ export async function requestRender(
     .update({ job_input: jobInput as unknown as Json })
     .eq('id', started.renderId)
 
+  // Claim the first submission, so a poll or the sweeper cannot submit it too.
+  if (!(await claimSubmission(started.renderId, null))) return started
   const { data: row } = await db.from('renders').select('*').eq('id', started.renderId).single()
   try {
     await submitWithRetry(row!)
@@ -314,15 +323,40 @@ async function submit(render: RenderRow): Promise<void> {
   if (error) throw new Error(`Could not record submission: ${error.message}`)
 }
 
+/**
+ * Where a provider's result image may be downloaded from. The URL comes from
+ * the provider's response or a signed webhook, but the server still refuses to
+ * fetch anything else, so a bad response can never point it at an internal
+ * address.
+ */
+const RESULT_HOSTS = ['fal.media', 'fal.ai', 'fal.run', 'storage.googleapis.com']
+
+export function isAllowedResultUrl(url: string): boolean {
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(url)) return true
+  try {
+    const parsed = new URL(url)
+    return (
+      parsed.protocol === 'https:' &&
+      RESULT_HOSTS.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`))
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Fetch the result image, from a URL or a data URI. */
 async function downloadResult(url: string): Promise<Buffer> {
+  if (!isAllowedResultUrl(url)) {
+    throw new Error(
+      `Result host not allowed: ${URL.canParse(url) ? new URL(url).hostname : 'invalid'}`,
+    )
+  }
   if (url.startsWith('data:')) {
     const match = /^data:image\/[a-z0-9.+-]+;base64,([A-Za-z0-9+/=]+)$/i.exec(url)
     if (!match) throw new Error('Malformed data URI result')
     return Buffer.from(match[1], 'base64')
   }
-  if (!url.startsWith('https://')) throw new Error('Result URL is not https')
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000), redirect: 'error' })
   if (!response.ok) throw new Error(`Result download failed: HTTP ${response.status}`)
   const length = Number(response.headers.get('content-length') ?? 0)
   if (length > RESULT_MAX_BYTES) throw new Error('Result image is too large')
@@ -348,8 +382,11 @@ async function finalize(render: RenderRow, imageUrl: string): Promise<void> {
       .toBuffer(),
   )
 
-  const resultPath = userPath(render.user_id, `${render.id}.jpg`)
-  const watermarkedPath = userPath(render.user_id, `${render.id}-wm.jpg`)
+  // Names unique to this finish attempt: a second delivery of the same result
+  // (poll and webhook at once) writes its own files and never touches these.
+  const suffix = randomUUID().slice(0, 8)
+  const resultPath = userPath(render.user_id, `${render.id}-${suffix}.jpg`)
+  const watermarkedPath = userPath(render.user_id, `${render.id}-${suffix}-wm.jpg`)
   await putObject({ bucket: BUCKETS.renders, path: resultPath }, clean, 'image/jpeg')
   await putObject({ bucket: BUCKETS.renders, path: watermarkedPath }, watermarked, 'image/jpeg')
 
@@ -360,15 +397,10 @@ async function finalize(render: RenderRow, imageUrl: string): Promise<void> {
     width: info.width,
     height: info.height,
   })
-  if (!accepted) {
-    // Either the render timed out (and was refunded) while this result was on
-    // its way, or another delivery of the same result finished it first. Only
-    // in the first case are the files orphans; in the second they are the result.
-    const current = await loadRender(render.id)
-    if (current?.status !== 'succeeded') {
-      await removeObjects(BUCKETS.renders, [resultPath, watermarkedPath])
-    }
-  }
+  // Not accepted: the render timed out (and was refunded) while this result
+  // was on its way, or another delivery finished it first. Either way these
+  // files are not the render's result and are safe to remove.
+  if (!accepted) await removeObjects(BUCKETS.renders, [resultPath, watermarkedPath])
 }
 
 /** Act on what the provider says about a job. Safe to call repeatedly and concurrently. */
@@ -402,9 +434,9 @@ async function retryOrFail(render: RenderRow, failure: JobState & { state: 'fail
     failure.retryable && render.attempts < MAX_ATTEMPTS && secondsLeft > MIN_SECONDS_FOR_RETRY
 
   if (eligible) {
-    // A poll and a webhook can both get here for the same failed attempt. Only
-    // the one that wins this claim resubmits, so the provider is paid once.
-    if (!(await claimForResubmit(render))) return
+    // A poll, a webhook and the sweeper can all get here for the same failed
+    // attempt. Only the caller that wins the claim resubmits; the others stop.
+    if (!(await claimSubmission(render.id, render.provider_request_id))) return
     try {
       await submit(render)
       return
@@ -416,29 +448,19 @@ async function retryOrFail(render: RenderRow, failure: JobState & { state: 'fail
 }
 
 /**
- * Atomically take the right to resubmit a render. Clearing the old request id
- * is the claim: a second caller holding the same old id matches no row.
+ * Take the right to submit a render to its provider (see
+ * claim_render_submission in the pipeline hardening migration). Pass the
+ * provider request id being replaced, or null when there is none yet.
  */
-async function claimForResubmit(render: RenderRow): Promise<boolean> {
-  const db = createAdminClient()
-  const base = db
-    .from('renders')
-    .update({
-      provider_request_id: null,
-      provider_endpoint: null,
-      last_checked_at: new Date().toISOString(),
-    })
-    .eq('id', render.id)
-    .in('status', ['queued', 'processing'])
-  const { data } = render.provider_request_id
-    ? await base.eq('provider_request_id', render.provider_request_id).select('id')
-    : await base
-        .is('provider_request_id', null)
-        .or(
-          `last_checked_at.is.null,last_checked_at.lt.${new Date(Date.now() - 10_000).toISOString()}`,
-        )
-        .select('id')
-  return (data?.length ?? 0) > 0
+async function claimSubmission(renderId: string, replacing: string | null): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc('claim_render_submission', {
+    p_render_id: renderId,
+    p_expected_request_id: replacing as string,
+    p_stale_seconds: SUBMIT_CLAIM_STALE_SECONDS,
+    p_max_attempts: MAX_ATTEMPTS,
+  })
+  if (error) throw new Error(`Could not claim render submission: ${error.message}`)
+  return data === true
 }
 
 async function loadRender(renderId: string): Promise<RenderRow | null> {
@@ -463,30 +485,27 @@ export async function refreshRender(renderId: string): Promise<void> {
     return
   }
 
-  // Never handed to the provider (the request that created it died): submit it now.
+  // Never handed to the provider (the request that created it died, or a
+  // resubmission is under way): the claim decides whether to submit it now.
   if (!render.provider_request_id || !render.provider_endpoint) {
-    if (Date.now() - new Date(render.created_at).getTime() > 15_000) {
-      await retryOrFail(render, {
-        state: 'failed',
-        code: 'submit_failed',
-        message: 'Render was never submitted.',
-        retryable: true,
-      })
-    }
+    // Still being set up by the request that created it; the deadline covers a crash.
+    if (!render.job_input) return
+    await retryOrFail(render, {
+      state: 'failed',
+      code: 'submit_failed',
+      message: 'Render was never submitted.',
+      retryable: true,
+    })
     return
   }
 
-  // Claim this check: concurrent pollers of the same render ask the provider once.
-  const { data: claimed } = await createAdminClient()
-    .from('renders')
-    .update({ last_checked_at: new Date().toISOString() })
-    .eq('id', render.id)
-    .eq('provider_request_id', render.provider_request_id)
-    .or(
-      `last_checked_at.is.null,last_checked_at.lt.${new Date(Date.now() - CHECK_INTERVAL_MS).toISOString()}`,
-    )
-    .select('id')
-  if (!claimed?.length) return
+  // Concurrent pollers of the same render ask the provider at most once per interval.
+  const { data: due } = await createAdminClient().rpc('claim_render_check', {
+    p_render_id: render.id,
+    p_request_id: render.provider_request_id,
+    p_interval_ms: CHECK_INTERVAL_MS,
+  })
+  if (due !== true) return
 
   const state = await getProvider(render.provider).check(
     render.provider_endpoint,

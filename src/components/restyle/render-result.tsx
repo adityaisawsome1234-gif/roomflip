@@ -46,7 +46,8 @@ export function RenderResult({
   const [busy, setBusy] = useState<null | 'regenerate' | 'hd' | 'save'>(null)
   const [blocked, setBlocked] = useState<null | 'credits' | 'hd'>(null)
   const [error, setError] = useState<string | null>(null)
-  const requestId = useRef<string | null>(null)
+  // One request id per action, kept across retries after an uncertain failure.
+  const pending = useRef<{ key: string; id: string } | null>(null)
   const startedAt = useRef(new Date(initial.createdAt).getTime())
 
   // Poll until the render finishes. Each poll also moves the job along on the server.
@@ -86,14 +87,15 @@ export function RenderResult({
   async function again(tier: 'preview' | 'hd') {
     setError(null)
     setBusy(tier === 'hd' ? 'hd' : 'regenerate')
-    requestId.current ??= crypto.randomUUID()
+    if (pending.current?.key !== tier) pending.current = { key: tier, id: crypto.randomUUID() }
+    const id = pending.current.id
     const result =
       tier === 'hd'
-        ? await startRender({ tier: 'hd', sourceRenderId: render.id }, requestId.current)
+        ? await startRender({ tier: 'hd', sourceRenderId: render.id }, id)
         : choice
-          ? await startRender({ tier: 'preview', roomId: render.roomId, choice }, requestId.current)
+          ? await startRender({ tier: 'preview', roomId: render.roomId, choice }, id)
           : null
-    requestId.current = null
+    if (!result || result.ok || result.definite) pending.current = null
     if (result?.ok) {
       router.push(`/app/render/${result.renderId}`)
       return

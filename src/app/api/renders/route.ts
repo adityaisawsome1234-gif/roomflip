@@ -4,7 +4,7 @@ import { failStaleRenders } from '@/lib/credits/ledger'
 import { RenderError, requestRender } from '@/lib/render/jobs'
 import { renderRequestSchema } from '@/lib/render/request'
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * Start a render. JSON body, see renderRequestSchema:

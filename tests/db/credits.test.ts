@@ -525,3 +525,117 @@ describe('the ledger itself', () => {
     expect((await getCreditBalances(user.id)).total).toBe(3)
   })
 })
+
+describe('refunds across a plan renewal (review finding)', () => {
+  async function planUserWithPendingRender(label: string, planCredits: number) {
+    const ctx = await setup(label)
+    await getCreditBalances(ctx.user.id) // 3 free
+    await grantCredits({
+      userId: ctx.user.id,
+      amount: planCredits,
+      kind: 'subscription_grant',
+      bucket: 'subscription',
+      idempotencyKey: `inv:${randomUUID()}`,
+    })
+    const pending = await startRender(ctx.preview()) // paid from the plan bucket
+    return { ...ctx, pending }
+  }
+
+  it('does not bring back a plan credit when the bucket was emptied at renewal', async () => {
+    const { user, pending } = await planUserWithPendingRender('renew-empty', 1)
+    await grantCredits({
+      userId: user.id,
+      amount: 50,
+      kind: 'subscription_grant',
+      bucket: 'subscription',
+      idempotencyKey: `inv:${randomUUID()}`,
+      resetBucket: true,
+    })
+    const result = await failRender(pending.renderId, 'provider_error')
+    expect(result).toMatchObject({ changed: true, refunded: 0 })
+    expect(await getCreditBalances(user.id)).toMatchObject({ subscription: 50, free: 3 })
+  })
+
+  it('does not bring back a plan credit when leftovers were written off at renewal', async () => {
+    const { user, pending } = await planUserWithPendingRender('renew-left', 5)
+    await grantCredits({
+      userId: user.id,
+      amount: 50,
+      kind: 'subscription_grant',
+      bucket: 'subscription',
+      idempotencyKey: `inv:${randomUUID()}`,
+      resetBucket: true,
+    })
+    await failRender(pending.renderId, 'provider_error')
+    expect((await getCreditBalances(user.id)).subscription).toBe(50)
+  })
+
+  it('does not bring back a plan credit after the plan ended', async () => {
+    const { user, pending } = await planUserWithPendingRender('plan-end', 5)
+    await expireCredits({
+      userId: user.id,
+      bucket: 'subscription',
+      idempotencyKey: `end:${randomUUID()}`,
+    })
+    await failRender(pending.renderId, 'provider_error')
+    expect((await getCreditBalances(user.id)).subscription).toBe(0)
+  })
+
+  it('still refunds a plan credit within the same period', async () => {
+    const { user, pending } = await planUserWithPendingRender('same-period', 5)
+    expect(await failRender(pending.renderId, 'provider_error')).toMatchObject({ refunded: 1 })
+    expect((await getCreditBalances(user.id)).subscription).toBe(5)
+  })
+})
+
+describe('claiming a submission (review finding)', () => {
+  const claim = (renderId: string, replacing: string | null, staleSeconds = 60) =>
+    serviceClient().rpc('claim_render_submission', {
+      p_render_id: renderId,
+      p_expected_request_id: replacing as string,
+      p_stale_seconds: staleSeconds,
+      p_max_attempts: 2,
+    })
+
+  it('lets exactly one caller submit a new render, and takes over only from a dead claim', async () => {
+    const { preview } = await setup('claim-new')
+    const { renderId } = await startRender(preview())
+    const results = await Promise.all(Array.from({ length: 5 }, () => claim(renderId, null)))
+    expect(results.filter((r) => r.data === true)).toHaveLength(1)
+
+    // A live claim blocks others; one older than the stale limit can be taken over.
+    expect((await claim(renderId, null)).data).toBe(false)
+    await sql(
+      `update public.renders set last_checked_at = now() - interval '2 minutes' where id = $1`,
+      [renderId],
+    )
+    expect((await claim(renderId, null)).data).toBe(true)
+  })
+
+  it('lets exactly one caller replace a failed provider job, within the attempt limit', async () => {
+    const { preview } = await setup('claim-retry')
+    const { renderId } = await startRender(preview())
+    await serviceClient().rpc('mark_render_submitted', {
+      p_render_id: renderId,
+      p_provider_request_id: 'job-1',
+      p_provider_endpoint: 'mock',
+    })
+    const results = await Promise.all(Array.from({ length: 5 }, () => claim(renderId, 'job-1')))
+    expect(results.filter((r) => r.data === true)).toHaveLength(1)
+
+    await serviceClient().rpc('mark_render_submitted', {
+      p_render_id: renderId,
+      p_provider_request_id: 'job-2',
+      p_provider_endpoint: 'mock',
+    })
+    // Two submissions used: no third.
+    expect((await claim(renderId, 'job-2')).data).toBe(false)
+  })
+
+  it('never claims a finished render', async () => {
+    const { preview } = await setup('claim-done')
+    const { renderId } = await startRender(preview())
+    await failRender(renderId, 'x')
+    expect((await claim(renderId, null)).data).toBe(false)
+  })
+})

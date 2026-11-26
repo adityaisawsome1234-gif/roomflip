@@ -180,11 +180,25 @@ export async function completeRender(input: {
   return data === true
 }
 
-/** Fail and refund every in-flight render past its deadline. Returns the ids it failed. */
+/**
+ * Fail and refund every in-flight render past its deadline. Returns the ids it
+ * failed. Each render is handled in its own transaction, so one user's lock is
+ * never held while another's is processed, and concurrent sweeps cannot
+ * deadlock or double-refund.
+ */
 export async function failStaleRenders(limit = 100): Promise<string[]> {
-  const { data, error } = await createAdminClient().rpc('fail_stale_renders', { p_limit: limit })
+  const db = createAdminClient()
+  const { data: candidates, error } = await db.rpc('list_stale_renders', { p_limit: limit })
   if (error) throw toCreditsError(error)
-  return data ?? []
+  const failed: string[] = []
+  for (const renderId of candidates ?? []) {
+    const { data: changed, error: failError } = await db.rpc('fail_stale_render', {
+      p_render_id: renderId,
+    })
+    if (failError) throw toCreditsError(failError)
+    if (changed) failed.push(renderId)
+  }
+  return failed
 }
 
 export interface GrantCreditsInput {
