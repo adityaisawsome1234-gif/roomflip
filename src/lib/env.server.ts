@@ -26,6 +26,8 @@ export const SERVER_ENV_KEYS = [
   'STRIPE_PRICE_PRO_ANNUAL',
   'STRIPE_PRICE_PACK_20',
   'STRIPE_PRICE_PACK_60',
+  // Test only: point the Stripe client at stripe-mock (http://localhost:12111).
+  'STRIPE_API_BASE',
   // Analytics (PostHog), server-side capture
   'POSTHOG_API_KEY',
   // Admin page allowlist: comma-separated emails

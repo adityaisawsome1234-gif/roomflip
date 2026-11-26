@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { CREDITS, type RenderTier } from '@/lib/config/pricing'
+import { CREDITS, PLANS, type PlanId, type RenderTier } from '@/lib/config/pricing'
 import { RENDER_DEADLINE_SECONDS } from '@/lib/config/jobs'
 import { renderCostUsd, type ModelSpec } from '@/lib/config/models'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -70,11 +70,63 @@ function firstRow<T>(rows: T[] | null, what: string): T {
   return row
 }
 
+/** The start of the month `months` after `start`, keeping the day where the month allows. */
+function addMonths(start: Date, months: number): Date {
+  const result = new Date(start)
+  const day = result.getUTCDate()
+  result.setUTCDate(1)
+  result.setUTCMonth(result.getUTCMonth() + months)
+  const lastDay = new Date(
+    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0),
+  ).getUTCDate()
+  result.setUTCDate(Math.min(day, lastDay))
+  return result
+}
+
+/**
+ * Plans billed yearly but credited monthly (Pro Annual): grant this month's
+ * credits if they are due and not yet granted. The yearly invoice grants
+ * month 0 (see the Stripe webhook); this grants months 1 to 11, without
+ * rollover. Called whenever a balance is read, and by the daily cron.
+ */
+export async function grantDuePlanCredits(userId: string, now: Date = new Date()): Promise<number> {
+  const { data: subscriptions } = await createAdminClient()
+    .from('subscriptions')
+    .select('id, plan_id, current_period_start, current_period_end')
+    .eq('user_id', userId)
+    .in('status', ['active', 'trialing', 'past_due'])
+  let granted = 0
+  for (const sub of subscriptions ?? []) {
+    const plan = PLANS[sub.plan_id as PlanId]
+    if (!plan || plan.credits.cadence !== 'monthly') continue
+    if (!sub.current_period_start || !sub.current_period_end) continue
+    const start = new Date(sub.current_period_start)
+    if (now < start || now >= new Date(sub.current_period_end)) continue
+
+    let month = 0
+    while (month < 11 && addMonths(start, month + 1) <= now) month++
+    if (month === 0) continue
+
+    const created = await grantCredits({
+      userId,
+      amount: plan.credits.amount,
+      kind: 'subscription_grant',
+      bucket: 'subscription',
+      idempotencyKey: `sub:${sub.id}:${Math.floor(start.getTime() / 1000)}:m${month}`,
+      metadata: { plan: sub.plan_id, subscription: sub.id, month },
+      resetBucket: !plan.rollover,
+    })
+    if (created) granted += plan.credits.amount
+  }
+  return granted
+}
+
 /**
  * The user's balances. Creates the one-time signup grant the first time it is
  * called for a user, so every path that shows or spends credits goes through here.
  */
 export async function getCreditBalances(userId: string): Promise<CreditBalances> {
+  await grantDuePlanCredits(userId)
   const { data, error } = await createAdminClient().rpc('credits_summary', {
     p_user_id: userId,
     p_signup_grant: CREDITS.signupGrant,

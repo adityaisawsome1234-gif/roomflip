@@ -9,6 +9,7 @@ import { CREDITS } from '@/lib/config/pricing'
 import { renderFailureMessage } from '@/lib/render/errors'
 import type { RenderView } from '@/lib/render/jobs'
 import type { RestyleChoice } from '@/lib/render/request'
+import { Paywall } from '@/components/billing/paywall'
 import { BeforeAfterSlider } from './before-after-slider'
 import { ExportPanel } from './export-panel'
 import { OutOfCredits } from './out-of-credits'
@@ -22,6 +23,12 @@ const STEPS = [
   'Adding light and detail…',
 ]
 
+/** Finished in the last two minutes: arriving here straight from the render, not revisiting. */
+function finishedRecently(render: RenderView): boolean {
+  if (render.status !== 'succeeded' || !render.completedAt) return false
+  return Date.now() - new Date(render.completedAt).getTime() < 120_000
+}
+
 function inFlight(status: RenderView['status']) {
   return status === 'queued' || status === 'processing'
 }
@@ -33,12 +40,15 @@ export function RenderResult({
   choice,
   paid,
   isSaved: initialSaved,
+  balance,
 }: {
   initial: RenderView
   label: string
   choice: RestyleChoice | null
   paid: boolean
   isSaved: boolean
+  /** Renders left after this one was paid for. */
+  balance: number
 }) {
   const router = useRouter()
   const [render, setRender] = useState(initial)
@@ -50,6 +60,11 @@ export function RenderResult({
   // One request id per action, kept across retries after an uncertain failure.
   const pending = useRef<{ key: string; id: string } | null>(null)
   const startedAt = useRef(new Date(initial.createdAt).getTime())
+  // The paywall opens right after a free user's last free render finishes: the
+  // moment they have just seen what the app can do, with the result behind it.
+  const [paywallOpen, setPaywallOpen] = useState(
+    () => !paid && balance === 0 && finishedRecently(initial),
+  )
 
   // Poll until the render finishes. Each poll also moves the job along on the server.
   useEffect(() => {
@@ -64,6 +79,7 @@ export function RenderResult({
         setRender(next)
         // The top bar's balance changes when a render is refunded.
         if (!inFlight(next.status)) router.refresh()
+        if (next.status === 'succeeded' && !paid && balance === 0) setPaywallOpen(true)
       } catch {
         // Offline for a moment: the next poll tries again.
         if (!cancelled) setRender((current) => ({ ...current }))
@@ -73,7 +89,7 @@ export function RenderResult({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [render, router])
+  }, [render, router, paid, balance])
 
   // A ticking clock while waiting, so the screen never looks frozen.
   useEffect(() => {
@@ -180,7 +196,7 @@ export function RenderResult({
           {error}
         </p>
       )}
-      {blocked && <OutOfCredits reason={blocked} />}
+      {blocked && <OutOfCredits reason={blocked} autoOpen />}
 
       {!inFlight(render.status) && (
         <div className="flex flex-col gap-3">
@@ -247,6 +263,12 @@ export function RenderResult({
           )}
         </div>
       )}
+      <Paywall
+        open={paywallOpen}
+        reason="after_result"
+        onClose={() => setPaywallOpen(false)}
+        returnPath={`/app/render/${render.id}`}
+      />
     </div>
   )
 }

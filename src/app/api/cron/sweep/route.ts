@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
-import { failStaleRenders } from '@/lib/credits/ledger'
+import { failStaleRenders, grantDuePlanCredits } from '@/lib/credits/ledger'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { optionalServerEnv } from '@/lib/env.server'
 import { refreshNeglectedRenders } from '@/lib/render/jobs'
 
@@ -15,16 +16,27 @@ function authorized(request: Request): boolean {
 
 /**
  * Scheduled maintenance (Vercel Cron sends the CRON_SECRET bearer token):
- * refund renders past their deadline, and finish jobs whose webhook was lost
- * and that nobody is polling.
+ * refund renders past their deadline, finish jobs whose webhook was lost and
+ * that nobody is polling, and grant yearly plans their monthly credits.
  */
 export async function GET(request: Request) {
   if (!authorized(request)) return new Response('unauthorized', { status: 401 })
   // Refunds first: they are quick and must not wait behind slow provider checks.
   const failed = await failStaleRenders(500)
   const refreshed = await refreshNeglectedRenders(50)
+
+  // Monthly credits for yearly plans, for people who have not opened the app this month.
+  const { data: annual } = await createAdminClient()
+    .from('subscriptions')
+    .select('user_id')
+    .eq('plan_id', 'pro_annual')
+    .in('status', ['active', 'trialing', 'past_due'])
+  let planCredits = 0
+  for (const userId of new Set((annual ?? []).map((row) => row.user_id))) {
+    planCredits += await grantDuePlanCredits(userId)
+  }
   return Response.json(
-    { refreshed, timedOut: failed.length },
+    { refreshed, timedOut: failed.length, planCredits },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

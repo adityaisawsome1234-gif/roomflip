@@ -15,7 +15,7 @@ text in `supabase/templates/sign_in.html`.
 | 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done        |
 | 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done        |
 | 5   | Export Reel and square before/after image                     | Done        |
-| 6   | Stripe checkout, portal, webhooks, paywall                    | Not started |
+| 6   | Stripe checkout, portal, webhooks, paywall                    | Done        |
 | 7   | Analytics, admin page, rate limits                            | Not started |
 | 8   | Landing page, deployment                                      | Not started |
 
@@ -192,6 +192,59 @@ Frames are composed with `sharp` using the bundled Geist font, and joined by the
 from the `ffmpeg-static` package. That binary is GPL-licensed; it runs only on our server and is
 never distributed to users. `next.config.ts` includes it in the export route's bundle only, so
 the other functions stay small. Set `FFMPEG_PATH` to use a different ffmpeg.
+
+## Payments (Stripe)
+
+What can be bought is set in `src/lib/config/pricing.ts`: Pro Weekly ($6.99, 50 renders per paid
+week), Pro Annual ($59.99, 100 renders a month, no rollover), and packs of 20 ($4.99) and 60
+($9.99). Checkout and the customer portal are hosted by Stripe; the app never sees card details.
+
+**How credits arrive.** Only webhooks grant credits, never the browser returning from checkout:
+
+| Stripe event                                                             | What happens                                                               |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `checkout.session.completed`, `checkout.session.async_payment_succeeded` | Pack credits, once per checkout session                                    |
+| `invoice.paid`                                                           | Weekly: 50 credits, replacing any left over. Annual: the first month's 100 |
+| `customer.subscription.created`, `.updated`, `.deleted`                  | Plan status; when a plan ends its remaining plan credits end too           |
+
+Annual plans get each later month's 100 credits the next time the user's balance is read, or from
+the daily cron, whichever comes first. Every grant has an idempotency key made from Stripe ids, so
+repeated or out-of-order deliveries are harmless. Purchased and free credits never expire.
+
+**The paywall** opens right after a free user's last free render finishes, over the result, so
+the before/after stays visible behind it. It also opens when someone tries to render with
+nothing left, or asks for HD on the free plan.
+
+### Setting up Stripe
+
+1. In the Stripe dashboard, in test mode, copy the secret key into `STRIPE_SECRET_KEY`.
+2. Create the products and prices:
+
+   ```bash
+   STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs
+   ```
+
+   It prints the four `STRIPE_PRICE_*` lines to add to `.env.local` and Vercel.
+
+3. Add a webhook endpoint at `https://<your domain>/api/webhooks/stripe` with the six events in
+   the table above, and put its signing secret in `STRIPE_WEBHOOK_SECRET`. Locally, use
+   `stripe listen --forward-to localhost:3000/api/webhooks/stripe`, which prints a secret too.
+4. In Settings, Billing, Customer portal: allow cancelling, updating payment methods and
+   switching between the weekly and annual prices.
+5. Repeat in live mode when you launch (`node scripts/stripe-setup.mjs --live` with the live key).
+
+### Testing without Stripe
+
+The tests use [stripe-mock](https://github.com/stripe/stripe-mock) for API calls and sign webhook
+events locally:
+
+```bash
+docker run -d -p 12111:12111 stripe/stripe-mock
+```
+
+Then set `STRIPE_API_BASE=http://localhost:12111`, a placeholder `STRIPE_SECRET_KEY` such as
+`sk_test_123`, any `STRIPE_WEBHOOK_SECRET`, and placeholder `STRIPE_PRICE_*` ids in `.env.local`.
+`STRIPE_API_BASE` is ignored in production builds.
 
 ## Credits
 

@@ -153,13 +153,20 @@ test('out of renders and HD for free users point to the plans', async ({ page })
   }
   await expectResult(page)
 
-  await page.getByRole('button', { name: 'Save in HD' }).click()
-  await expect(page.getByText('HD is part of Pro')).toBeVisible()
+  // The third result was the last free one: the paywall opens over it. Close it to carry on.
+  await page.getByRole('button', { name: 'Not now' }).click()
 
+  await page.getByRole('button', { name: 'Save in HD' }).click()
+  await expect(page.getByRole('dialog', { name: 'Save it in HD with Pro' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // Opening the room with nothing left shows a calm prompt, not a pop-up.
   await page.goto(roomUrl)
   await expect(page.getByText("You've used all your renders")).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Restyle my room' })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'See plans' })).toBeVisible()
+  await page.getByRole('button', { name: 'See plans' }).click()
+  await expect(page.getByRole('dialog', { name: "You're out of renders" })).toBeVisible()
 })
 
 test('the flow fits a phone screen', async ({ page }) => {

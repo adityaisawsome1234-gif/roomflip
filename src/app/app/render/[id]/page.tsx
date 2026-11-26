@@ -4,6 +4,7 @@ import { Suspense } from 'react'
 import { RenderResult } from '@/components/restyle/render-result'
 import { requireUser } from '@/lib/auth/session'
 import { getEntitlement } from '@/lib/credits/entitlement'
+import { getCreditBalances } from '@/lib/credits/ledger'
 import { choiceFromParams, describeChoice } from '@/lib/render/choice'
 import { getRenderView } from '@/lib/render/jobs'
 
@@ -25,9 +26,10 @@ async function Result({ params }: Pick<PageProps<'/app/render/[id]'>, 'params'>)
   const user = await requireUser(`/app/render/${id}`)
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound()
 
-  const [render, entitlement] = await Promise.all([
+  const [render, entitlement, balances] = await Promise.all([
     getRenderView(user.id, id),
     getEntitlement(user.id),
+    getCreditBalances(user.id),
   ])
   if (!render) notFound()
 
@@ -41,6 +43,7 @@ async function Result({ params }: Pick<PageProps<'/app/render/[id]'>, 'params'>)
       choice={choiceFromParams(render.mode, params_)}
       paid={entitlement === 'paid'}
       isSaved={render.isSaved}
+      balance={balances.total}
     />
   )
 }

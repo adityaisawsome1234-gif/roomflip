@@ -42,7 +42,10 @@ export function RestyleChooser({
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [outOfCredits, setOutOfCredits] = useState(balance < CREDITS.cost.preview)
+  // 'idle' when the room opens with nothing left; 'tried' after a refused render.
+  const [outOfCredits, setOutOfCredits] = useState<false | 'idle' | 'tried'>(
+    balance < CREDITS.cost.preview ? 'idle' : false,
+  )
   // One request id per intended render: reused while retrying the same choice
   // after an uncertain failure, replaced when the choice changes.
   const pending = useRef<{ key: string; id: string } | null>(null)
@@ -82,7 +85,7 @@ export function RestyleChooser({
     }
     // Keep the id after an uncertain failure, so tapping again cannot charge twice.
     if (result.definite) pending.current = null
-    if (result.outOfCredits) setOutOfCredits(true)
+    if (result.outOfCredits) setOutOfCredits('tried')
     else setError(result.message)
     setSubmitting(false)
   }
@@ -124,7 +127,7 @@ export function RestyleChooser({
 
       <div className="bg-bg/95 sticky bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom))] -mx-5 flex flex-col gap-3 px-5 pt-3 pb-4 backdrop-blur">
         {outOfCredits ? (
-          <OutOfCredits reason="credits" />
+          <OutOfCredits reason="credits" autoOpen={outOfCredits === 'tried'} />
         ) : (
           <>
             {error && (
