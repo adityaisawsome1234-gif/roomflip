@@ -12,7 +12,7 @@ text in `supabase/templates/sign_in.html`.
 | --- | ------------------------------------------------------------- | ----------- |
 | 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done        |
 | 2   | Credits ledger                                                | Done        |
-| 3   | Upload pipeline, model providers, prompt builder, async jobs  | Not started |
+| 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done        |
 | 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Not started |
 | 5   | Export Reel and square before/after image                     | Not started |
 | 6   | Stripe checkout, portal, webhooks, paywall                    | Not started |
@@ -124,6 +124,51 @@ numbers.
 
 `.env.example` lists every environment variable, grouped by the service it belongs to. A unit test
 fails if the code reads a server variable that the file does not document.
+
+## Render pipeline
+
+```
+browser ── POST /api/rooms ──► shrink in browser, then on the server: re-encode,
+                               strip metadata, moderate, store privately
+        ── POST /api/renders ─► validate, build prompt, take 1 credit (same
+                               transaction as the job row), submit to the model
+        ── GET /api/renders/:id (poll) ─┐
+fal ───── POST /api/webhooks/fal ───────┴► finish: store the result and a
+                                          watermarked copy, or retry once,
+                                          or fail and refund
+cron ──── GET /api/cron/sweep ──────────► refund jobs past their deadline
+```
+
+- **Models** are config, not code: `src/lib/config/models.ts` lists each model with its endpoint,
+  price per render and how it takes an output size. `TIER_MODEL_DEFAULTS` picks the preview and HD
+  models; `RENDER_MODEL_PREVIEW` and `RENDER_MODEL_HD` override them per environment. Every provider
+  implements `ImageEditProvider` (`src/lib/render/providers/`).
+- **Prompts** come from `src/lib/render/prompt.ts`. Every prompt carries the same fixed block that
+  keeps the room's walls, windows, doors, layout and camera unchanged.
+- **Failure handling:** an infrastructure error is retried once; a refusal or bad input is not.
+  Anything that ends in failure, including a timeout, refunds the credit exactly once. A result
+  that arrives after the timeout is discarded.
+- **Mock model:** without `FAL_KEY`, local development renders with a free mock that tints the
+  photo. Typing `mock:fail`, `mock:flaky` or `mock:hang` into a free-text style makes it fail,
+  fail once then succeed, or never finish, which is how the tests exercise refunds and retries.
+- **Compare models:** `/dev/compare` sends one photo to several models side by side and shows each
+  one's cost per render. It is open to anyone signed in during local development and only to
+  `ADMIN_EMAILS` in production.
+
+### Using the real models
+
+Add both keys to `.env.local` and restart `npm run dev`:
+
+- `FAL_KEY` from fal.ai (Dashboard, then Keys). Each preview costs about $0.027, each HD final about
+  $0.07, at the prices recorded in `src/lib/config/models.ts`.
+- `OPENAI_API_KEY` from platform.openai.com, used only for the free moderation endpoint.
+
+fal cannot call a webhook on `localhost`, so local renders finish by polling. On a deployed site
+the webhook does the work and polling is the fallback.
+
+The sweeper runs daily because that is the most Vercel's free plan allows. On Vercel Pro, change
+the schedule in `vercel.json` to `*/5 * * * *`. Expired jobs are also refunded whenever anyone
+starts a render or checks on one, so the daily run is only a backstop.
 
 ## Credits
 

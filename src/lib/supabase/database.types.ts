@@ -126,11 +126,14 @@ export type Database = {
           error_message: string | null
           id: string
           is_saved: boolean
+          job_input: Json | null
+          last_checked_at: string | null
           mode: string
           model: string
           params: NonNullable<Json>
           prompt: string
           provider: string
+          provider_endpoint: string | null
           provider_request_id: string | null
           result_height: number | null
           result_path: string | null
@@ -157,11 +160,14 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_saved?: boolean
+          job_input?: Json | null
+          last_checked_at?: string | null
           mode: string
           model: string
           params?: NonNullable<Json>
           prompt: string
           provider: string
+          provider_endpoint?: string | null
           provider_request_id?: string | null
           result_height?: number | null
           result_path?: string | null
@@ -187,11 +193,14 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_saved?: boolean
+          job_input?: Json | null
+          last_checked_at?: string | null
           mode?: string
           model?: string
           params?: NonNullable<Json>
           prompt?: string
           provider?: string
+          provider_endpoint?: string | null
           provider_request_id?: string | null
           result_height?: number | null
           result_path?: string | null
@@ -237,6 +246,7 @@ export type Database = {
           height: number
           id: string
           mime_type: string
+          moderation: string
           original_path: string
           room_type: string | null
           title: string | null
@@ -251,6 +261,7 @@ export type Database = {
           height: number
           id?: string
           mime_type: string
+          moderation?: string
           original_path: string
           room_type?: string | null
           title?: string | null
@@ -264,6 +275,7 @@ export type Database = {
           height?: number
           id?: string
           mime_type?: string
+          moderation?: string
           original_path?: string
           room_type?: string | null
           title?: string | null
@@ -273,6 +285,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'rooms_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      swatches: {
+        Row: {
+          bytes: number
+          created_at: string
+          deleted_at: string | null
+          height: number
+          id: string
+          mime_type: string
+          moderation: string
+          path: string
+          user_id: string
+          width: number
+        }
+        ComputedFields: never
+        Insert: {
+          bytes: number
+          created_at?: string
+          deleted_at?: string | null
+          height: number
+          id?: string
+          mime_type: string
+          moderation?: string
+          path: string
+          user_id: string
+          width: number
+        }
+        Update: {
+          bytes?: number
+          created_at?: string
+          deleted_at?: string | null
+          height?: number
+          id?: string
+          mime_type?: string
+          moderation?: string
+          path?: string
+          user_id?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'swatches_user_id_fkey'
             columns: ['user_id']
             isOneToOne: false
             referencedRelation: 'profiles'
@@ -350,6 +410,10 @@ export type Database = {
           p_reset_bucket?: boolean
           p_user_id: string
         }
+        Returns: boolean
+      }
+      mark_render_submitted: {
+        Args: { p_provider_endpoint: string; p_provider_request_id: string; p_render_id: string }
         Returns: boolean
       }
       start_render: {

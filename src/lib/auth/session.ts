@@ -2,6 +2,7 @@ import 'server-only'
 
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
+import { connection } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { ROUTES } from '@/lib/config/site'
 import { loginPath } from './redirects'
@@ -20,6 +21,9 @@ export interface SessionUser {
  * Action or Route Handler.
  */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
+  // Verifying a session compares the token's expiry with the current time, so
+  // it can only happen at request time, never in a prerender or prefetch.
+  await connection()
   const supabase = await createClient()
   const { data, error } = await supabase.auth.getClaims()
   const claims = data?.claims

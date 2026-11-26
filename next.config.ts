@@ -34,6 +34,11 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // Watermarks and reel captions are drawn from a bundled font (serverless hosts have
+  // no system fonts). Files read at runtime are not traced automatically, so include them.
+  outputFileTracingIncludes: {
+    '/*': ['./assets/fonts/**/*'],
+  },
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

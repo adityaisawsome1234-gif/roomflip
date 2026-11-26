@@ -40,7 +40,34 @@ export interface ModelSpec {
   /** True when costUsd is our estimate from token rates rather than a published per-image price. */
   priceIsEstimate: boolean
   priceCheckedOn: string
+  /** How the provider is told the output size. See src/lib/render/providers/sizing.ts. */
+  sizing: ModelSizing
 }
+
+/**
+ * How a model takes its output size.
+ *   pixels       exact width and height, within an area range, rounded to a multiple
+ *   ratio        any "w:h" aspect ratio; the model picks the resolution
+ *   ratio_preset one of a fixed list of aspect ratios; the model picks the resolution
+ */
+export type ModelSizing =
+  | { kind: 'pixels'; minArea: number; maxArea: number; multipleOf: number; maxEdge: number }
+  | { kind: 'ratio' }
+  | { kind: 'ratio_preset'; presets: readonly string[] }
+
+/** Aspect ratios the Gemini-based models accept. */
+const GEMINI_RATIOS = [
+  '21:9',
+  '16:9',
+  '3:2',
+  '4:3',
+  '5:4',
+  '1:1',
+  '4:5',
+  '3:4',
+  '2:3',
+  '9:16',
+] as const
 
 const CHECKED = '2026-11-25'
 
@@ -59,6 +86,7 @@ export const MODELS = {
     priceIsTentative: true,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'pixels', minArea: 921_600, maxArea: 2_359_296, multipleOf: 16, maxEdge: 4096 },
   },
   'seedream-5-flash-edit': {
     id: 'seedream-5-flash-edit',
@@ -72,6 +100,7 @@ export const MODELS = {
     priceIsTentative: false,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'pixels', minArea: 921_600, maxArea: 4_624_220, multipleOf: 16, maxEdge: 4096 },
   },
   'flux-3-klein-edit': {
     id: 'flux-3-klein-edit',
@@ -87,6 +116,7 @@ export const MODELS = {
     priceIsTentative: false,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'pixels', minArea: 65_536, maxArea: 16_777_216, multipleOf: 16, maxEdge: 4096 },
   },
   'muse-image-edit': {
     id: 'muse-image-edit',
@@ -100,6 +130,7 @@ export const MODELS = {
     priceIsTentative: false,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'ratio' },
   },
   'nano-banana-2-edit': {
     id: 'nano-banana-2-edit',
@@ -114,6 +145,7 @@ export const MODELS = {
     priceIsTentative: true,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'ratio_preset', presets: GEMINI_RATIOS },
   },
   'nano-banana-lite-edit': {
     id: 'nano-banana-lite-edit',
@@ -129,6 +161,7 @@ export const MODELS = {
     priceIsTentative: false,
     priceIsEstimate: true,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'ratio_preset', presets: GEMINI_RATIOS },
   },
   /** Returns a tinted copy of the input. For tests and local work without a fal key. */
   mock: {
@@ -143,6 +176,7 @@ export const MODELS = {
     priceIsTentative: false,
     priceIsEstimate: false,
     priceCheckedOn: CHECKED,
+    sizing: { kind: 'pixels', minArea: 65_536, maxArea: 16_777_216, multipleOf: 16, maxEdge: 4096 },
   },
 } as const satisfies Record<string, ModelSpec>
 
