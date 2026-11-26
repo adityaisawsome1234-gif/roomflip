@@ -11,12 +11,12 @@ import { TopBar } from './top-bar'
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="border-line mx-auto flex w-full max-w-md flex-1 flex-col sm:border-x">
+    <div className="border-line mx-auto flex w-full max-w-md flex-1 flex-col pb-[env(safe-area-inset-bottom)] sm:border-x">
       <TopBar />
-      {/* The bottom padding is the tab bar's height plus breathing room. */}
-      <main className="flex flex-1 flex-col px-5 pt-2 pb-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom)+1.5rem)]">
-        {children}
-      </main>
+      <main className="flex flex-1 flex-col px-5 pt-2 pb-6">{children}</main>
+      {/* Reserves the space the fixed tab bar covers, so the end of a page is never hidden behind it. */}
+      <div aria-hidden="true" className="h-tabbar shrink-0" />
+      {/* usePathname() suspends while a page with a dynamic segment is prerendered. */}
       <Suspense fallback={<TabBarFallback />}>
         <TabBar />
       </Suspense>

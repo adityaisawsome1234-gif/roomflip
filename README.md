@@ -8,16 +8,16 @@ text in `supabase/templates/sign_in.html`.
 
 ## Build status
 
-| #   | Milestone                                                              | Status      |
-| --- | ---------------------------------------------------------------------- | ----------- |
-| 1   | Scaffold, schema, auth, PWA shell, paint catalog                       | Done        |
-| 2   | Credits ledger                                                         | Not started |
-| 3   | Upload pipeline, model providers, prompt builder, async jobs           | Not started |
-| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms          | Not started |
-| 5   | Export Reel and square before/after image                              | Not started |
-| 6   | Stripe checkout, portal, webhooks, paywall                             | Not started |
-| 7   | Analytics, admin page, rate limits                                     | Not started |
-| 8   | Landing page, deployment                                               | Not started |
+| #   | Milestone                                                     | Status      |
+| --- | ------------------------------------------------------------- | ----------- |
+| 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done        |
+| 2   | Credits ledger                                                | Not started |
+| 3   | Upload pipeline, model providers, prompt builder, async jobs  | Not started |
+| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Not started |
+| 5   | Export Reel and square before/after image                     | Not started |
+| 6   | Stripe checkout, portal, webhooks, paywall                    | Not started |
+| 7   | Analytics, admin page, rate limits                            | Not started |
+| 8   | Landing page, deployment                                      | Not started |
 
 ## Stack
 
@@ -73,18 +73,18 @@ Email sign-in works out of the box. Google needs an OAuth client, which is free 
 
 ## Commands
 
-| Command                | What it does                                                         |
-| ---------------------- | -------------------------------------------------------------------- |
-| `npm run dev`          | Start the app on http://localhost:3000                               |
-| `npm run build`        | Production build                                                     |
-| `npm run typecheck`    | Generate route types and run the TypeScript compiler                 |
-| `npm run lint`         | ESLint                                                               |
-| `npm run format`       | Prettier                                                             |
-| `npm test`             | Unit tests (no services needed)                                      |
-| `npm run test:db`      | Database security tests (needs `npx supabase start`)                 |
-| `npm run test:e2e`     | Playwright end-to-end tests (needs Supabase; starts the dev server)  |
-| `npm run db:reset`     | Rebuild the local database from the migrations                       |
-| `npm run db:types`     | Regenerate `src/lib/supabase/database.types.ts` after a schema change |
+| Command             | What it does                                                          |
+| ------------------- | --------------------------------------------------------------------- |
+| `npm run dev`       | Start the app on http://localhost:3000                                |
+| `npm run build`     | Production build                                                      |
+| `npm run typecheck` | Generate route types and run the TypeScript compiler                  |
+| `npm run lint`      | ESLint                                                                |
+| `npm run format`    | Prettier                                                              |
+| `npm test`          | Unit tests (no services needed)                                       |
+| `npm run test:db`   | Database security tests (needs `npx supabase start`)                  |
+| `npm run test:e2e`  | Playwright end-to-end tests (needs Supabase; starts the dev server)   |
+| `npm run db:reset`  | Rebuild the local database from the migrations                        |
+| `npm run db:types`  | Regenerate `src/lib/supabase/database.types.ts` after a schema change |
 
 The service worker only registers in production builds. To test it, run `npm run build`, then
 `npm run start -- -p 3100`, then:

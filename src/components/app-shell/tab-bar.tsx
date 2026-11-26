@@ -29,8 +29,8 @@ function isActive(tab: Tab, pathname: string | null): boolean {
 
 /**
  * Fixed bottom navigation for the signed-in app. Its height is the `tabbar`
- * spacing token plus the device's bottom safe area; AppShell pads the page
- * content by the same amount so nothing sits behind it.
+ * spacing token plus the device's bottom safe area. AppShell reserves the same
+ * space under the page content so nothing sits behind the bar.
  */
 export function TabBar() {
   return <TabBarView pathname={usePathname()} />
@@ -48,12 +48,9 @@ function TabBarView({ pathname }: { pathname: string | null }) {
   return (
     <nav
       aria-label="Main"
-      className={cn(
-        'border-line bg-surface fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t sm:border-x',
-        'h-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)]',
-      )}
+      className="border-line bg-surface fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md pb-[env(safe-area-inset-bottom)] sm:border-x"
     >
-      <ul className="flex h-full">
+      <ul className="border-line h-tabbar flex border-t">
         {TABS.map((tab) => {
           const active = isActive(tab, pathname)
           const Icon = tab.icon
@@ -64,7 +61,9 @@ function TabBarView({ pathname }: { pathname: string | null }) {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex h-full min-h-11 flex-col items-center justify-center gap-1 text-xs font-medium',
-                  '-outline-offset-2 transition-colors',
+                  // Draw the focus ring inside the tab: outside it, the screen edge would clip it.
+                  // Important, because the global :focus-visible rule sets the offset too.
+                  '-outline-offset-2! transition-colors',
                   active ? 'text-accent' : 'text-muted hover:text-ink',
                 )}
               >

@@ -17,18 +17,20 @@ export interface SignInEmail {
   code: string
 }
 
+/** One row of a Mailpit search result. */
 interface MailpitSummary {
   ID: string
   Created: string
   Subject: string
 }
 
-interface MailpitMessage extends MailpitSummary {
+/** The parts of GET /api/v1/message/<ID> that we read. */
+interface MailpitBody {
   Text: string
   HTML: string
 }
 
-async function mailpit<T>(path: string, init?: RequestInit): Promise<T> {
+async function mailpit(path: string, init?: RequestInit): Promise<Response> {
   let response: Response
   try {
     response = await fetch(`${MAILPIT_URL}${path}`, init)
@@ -40,8 +42,7 @@ async function mailpit<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(`Test mailbox answered ${response.status} for ${path}`)
   }
-  const body = await response.text()
-  return (body ? JSON.parse(body) : undefined) as T
+  return response
 }
 
 /** Mailpit search for mail addressed to exactly this address. Newest first. */
@@ -50,13 +51,16 @@ function toQuery(address: string): string {
 }
 
 async function listMessages(address: string): Promise<MailpitSummary[]> {
-  const result = await mailpit<{ messages: MailpitSummary[] }>(
-    `/api/v1/search?${toQuery(address)}&limit=50`,
-  )
+  const response = await mailpit(`/api/v1/search?${toQuery(address)}&limit=50`)
+  const result = (await response.json()) as { messages: MailpitSummary[] }
   return [...result.messages].sort((a, b) => Date.parse(b.Created) - Date.parse(a.Created))
 }
 
-function parseSignInEmail(address: string, message: MailpitMessage): SignInEmail {
+function parseSignInEmail(
+  address: string,
+  summary: MailpitSummary,
+  message: MailpitBody,
+): SignInEmail {
   // The plain-text part has the link unescaped; fall back to the HTML href.
   const link =
     /https?:\/\/[^\s<>"')]+\/auth\/confirm\?[^\s<>"')]+/.exec(message.Text)?.[0] ??
@@ -68,14 +72,14 @@ function parseSignInEmail(address: string, message: MailpitMessage): SignInEmail
   if (!link || !code) {
     throw new Error(
       `The sign-in email to ${address} is missing its ${!link ? 'link' : 'code'}.\n` +
-        `Subject: ${message.Subject}\n${message.Text}`,
+        `Subject: ${summary.Subject}\n${message.Text}`,
     )
   }
   return {
-    id: message.ID,
+    id: summary.ID,
     to: address,
-    subject: message.Subject,
-    receivedAt: new Date(message.Created),
+    subject: summary.Subject,
+    receivedAt: new Date(summary.Created),
     link,
     code,
   }
@@ -106,8 +110,8 @@ export async function waitForSignInEmail(
         (message.ID !== after.id && Date.parse(message.Created) >= after.receivedAt.getTime()),
     )
     if (newest) {
-      const full = await mailpit<MailpitMessage>(`/api/v1/message/${newest.ID}`)
-      return parseSignInEmail(address, full)
+      const response = await mailpit(`/api/v1/message/${newest.ID}`)
+      return parseSignInEmail(address, newest, (await response.json()) as MailpitBody)
     }
     if (Date.now() + delay > deadline) {
       throw new Error(
@@ -126,5 +130,5 @@ export async function countEmails(address: string): Promise<number> {
 
 /** Remove every email sent to `address`, so test runs do not pile up in the mailbox. */
 export async function deleteEmails(address: string): Promise<void> {
-  await mailpit<void>(`/api/v1/search?${toQuery(address)}`, { method: 'DELETE' })
+  await mailpit(`/api/v1/search?${toQuery(address)}`, { method: 'DELETE' })
 }

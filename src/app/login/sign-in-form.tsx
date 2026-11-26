@@ -57,7 +57,11 @@ function focusField(form: HTMLFormElement | null, name: string) {
 
 function ErrorMessage({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <p id={id} role="alert" className="rounded-control bg-danger-soft text-danger px-4 py-3 text-sm">
+    <p
+      id={id}
+      role="alert"
+      className="rounded-control bg-danger-soft text-danger px-4 py-3 text-sm"
+    >
       {children}
     </p>
   )
@@ -83,7 +87,11 @@ function EmailStep({ next, urlError, googleEnabled }: SignInFormProps) {
 
   // The URL's error is shown until the person acts on it: a new attempt replaces it.
   const error =
-    state.status === 'error' ? state.message : state.status === 'idle' && !lastEmail ? urlError : null
+    state.status === 'error'
+      ? state.message
+      : state.status === 'idle' && !lastEmail
+        ? urlError
+        : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -261,8 +269,9 @@ function CodeStep({ email, sentAt, next }: { email: string; sentAt: number; next
             readOnly={verifying}
             invalid={hasError}
             aria-describedby={hasError ? 'login-code-error' : undefined}
+            // The shared Input sets its own text size, so the larger size needs `!` to win.
             // Wide letter spacing leaves a gap after the last digit; the indent re-centres it.
-            className="h-16 text-center font-mono text-3xl font-semibold tracking-[0.3em] indent-[0.3em] tabular-nums"
+            className="h-16 text-center indent-[0.3em] text-3xl! font-semibold tracking-[0.3em] tabular-nums"
           />
         </div>
         <Button type="submit" variant="accent" size="lg" fullWidth disabled={verifying}>

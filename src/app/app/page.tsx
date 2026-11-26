@@ -19,7 +19,7 @@ export default function CreatePage() {
 
       <section
         aria-label="Add a photo"
-        className="border-line bg-surface rounded-card flex min-h-80 flex-1 flex-col items-center justify-center gap-6 border-2 border-dashed p-6 text-center"
+        className="border-muted/40 bg-surface rounded-card flex min-h-80 flex-1 flex-col items-center justify-center gap-6 border-2 border-dashed p-6 text-center"
       >
         <span className="bg-accent-soft text-accent flex size-16 items-center justify-center rounded-full">
           <ImagePlus aria-hidden="true" className="size-7" />
