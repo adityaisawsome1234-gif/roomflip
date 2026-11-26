@@ -6,9 +6,11 @@ import { getModel, isModelId, resolveTierModel, type ModelSpec } from '@/lib/con
 import { ENTITLEMENTS, type RenderTier } from '@/lib/config/pricing'
 import { getEntitlement } from '@/lib/credits/entitlement'
 import { CreditsError, completeRender, failRender, startRender } from '@/lib/credits/ledger'
+import { trackLater } from '@/lib/analytics'
 import { publicEnv } from '@/lib/env'
 import { optionalServerEnv } from '@/lib/env.server'
 import { addWatermark } from '@/lib/images/watermark'
+import { moderateText } from '@/lib/moderation'
 import { BUCKETS, putObject, removeObjects, signedUrl, userPath, type Bucket } from '@/lib/storage'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database, Json } from '@/lib/supabase/database.types'
@@ -124,9 +126,15 @@ async function resolveChoice(
   const db = createAdminClient()
   switch (choice.mode) {
     case 'style':
-      return 'preset' in choice
-        ? { spec: choice, params: { preset: choice.preset } }
-        : { spec: choice, params: { custom: choice.custom } }
+      if ('preset' in choice) return { spec: choice, params: { preset: choice.preset } }
+      if ((await moderateText(choice.custom)).outcome === 'flagged') {
+        throw new RenderError(
+          422,
+          'flagged_text',
+          "That description can't be used. Try describing the style differently.",
+        )
+      }
+      return { spec: choice, params: { custom: choice.custom } }
     case 'paint': {
       const { data: color } = await db
         .from('paint_colors')
@@ -400,7 +408,23 @@ async function finalize(render: RenderRow, imageUrl: string): Promise<void> {
   // Not accepted: the render timed out (and was refunded) while this result
   // was on its way, or another delivery finished it first. Either way these
   // files are not the render's result and are safe to remove.
-  if (!accepted) await removeObjects(BUCKETS.renders, [resultPath, watermarkedPath])
+  if (!accepted) {
+    await removeObjects(BUCKETS.renders, [resultPath, watermarkedPath])
+    return
+  }
+  trackLater(
+    'render_completed',
+    render.user_id,
+    {
+      render_id: render.id,
+      tier: render.tier,
+      mode: render.mode,
+      model: render.model,
+      attempts: render.attempts,
+      seconds: Math.round((Date.now() - new Date(render.created_at).getTime()) / 1000),
+    },
+    `render_completed:${render.id}`,
+  )
 }
 
 /** Act on what the provider says about a job. Safe to call repeatedly and concurrently. */

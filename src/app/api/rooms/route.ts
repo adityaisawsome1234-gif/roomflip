@@ -1,4 +1,5 @@
 import { apiUser, json, jsonError, readUpload } from '@/lib/api'
+import { limitRequest } from '@/lib/rate-limit'
 import { UPLOAD_LIMITS } from '@/lib/images/process'
 import { uploadErrorResponse } from '@/lib/upload-errors'
 import { createRoom } from '@/lib/uploads'
@@ -13,6 +14,8 @@ export const maxDuration = 30
 export async function POST(request: Request) {
   const user = await apiUser()
   if (user instanceof Response) return user
+  const limited = await limitRequest('upload', request, user.id)
+  if (limited) return limited
 
   const upload = await readUpload(request, 'photo', UPLOAD_LIMITS.maxBytes)
   if (upload instanceof Response) return upload

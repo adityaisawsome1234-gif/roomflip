@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type Stripe from 'stripe'
+import { trackLater } from '@/lib/analytics'
 import { CREDIT_PACKS, PLANS, type PlanId } from '@/lib/config/pricing'
 import { expireCredits, grantCredits } from '@/lib/credits/ledger'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -102,6 +103,17 @@ async function onCheckoutCompleted(session: Stripe.Checkout.Session): Promise<st
       },
       { onConflict: 'id', ignoreDuplicates: true },
     )
+  trackLater(
+    'purchase',
+    userId,
+    {
+      kind: 'pack',
+      item,
+      amount: (session.amount_total ?? 0) / 100,
+      currency: session.currency ?? 'usd',
+    },
+    `purchase:${session.id}`,
+  )
   return `ok: ${pack.credits} pack credits`
 }
 
@@ -174,6 +186,18 @@ async function onInvoicePaid(invoice: Stripe.Invoice): Promise<string> {
       currency: invoice.currency.toLowerCase(),
     },
     { onConflict: 'id', ignoreDuplicates: true },
+  )
+  trackLater(
+    'purchase',
+    userId,
+    {
+      kind: 'subscription',
+      item: planId,
+      amount: invoice.amount_paid / 100,
+      currency: invoice.currency,
+      renewal: invoice.billing_reason === 'subscription_cycle',
+    },
+    `purchase:${invoice.id}`,
   )
   return `ok: ${plan.credits.amount} plan credits`
 }

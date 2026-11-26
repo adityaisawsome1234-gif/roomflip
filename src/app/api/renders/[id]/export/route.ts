@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { trackLater } from '@/lib/analytics'
 import { apiUser, json, jsonError } from '@/lib/api'
+import { limitRequest } from '@/lib/rate-limit'
 import { ExportError, getOrCreateExport } from '@/lib/export/service'
 
 // Encoding a reel takes a few seconds; allow for a cold start as well.
@@ -15,6 +17,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export async function POST(request: Request, ctx: RouteContext<'/api/renders/[id]/export'>) {
   const user = await apiUser()
   if (user instanceof Response) return user
+  const limited = await limitRequest('export', request, user.id)
+  if (limited) return limited
   const { id } = await ctx.params
   if (!UUID.test(id)) return jsonError(404, 'not_found', 'Render not found.')
 
@@ -22,7 +26,15 @@ export async function POST(request: Request, ctx: RouteContext<'/api/renders/[id
   if (!parsed.success) return jsonError(400, 'invalid_request', "Send { kind: 'reel' | 'square' }.")
 
   try {
-    return json({ export: await getOrCreateExport(user.id, id, parsed.data.kind) })
+    const file = await getOrCreateExport(user.id, id, parsed.data.kind)
+    if (file.kind === 'reel') {
+      trackLater('export_reel', user.id, {
+        render_id: id,
+        watermarked: file.watermarked,
+        width: file.width,
+      })
+    }
+    return json({ export: file })
   } catch (error) {
     if (error instanceof ExportError) return jsonError(error.status, error.code, error.message)
     console.error('[export] failed:', (error as Error).message)

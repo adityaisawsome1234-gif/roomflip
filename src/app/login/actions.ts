@@ -1,6 +1,9 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { trackSignupIfNew } from '@/lib/auth/signup-event'
+import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { consumePostLoginPath, rememberPostLoginPath } from '@/lib/auth/post-login'
 import { safeNextPath } from '@/lib/auth/redirects'
 import { ROUTES } from '@/lib/config/site'
@@ -36,6 +39,12 @@ export async function requestSignIn(
     return { status: 'error', message: SIGN_IN_MESSAGES.invalidEmail, email: echo(typed) }
   }
   const email = parsed.data
+
+  // Stop email bombing: a few sign-in emails per address and per network.
+  const limit = await checkRateLimit('signInEmail', { ip: clientIp(await headers()), email })
+  if (!limit.allowed) {
+    return { status: 'error', message: SIGN_IN_MESSAGES.rateLimited, email: echo(typed) }
+  }
 
   // The emailed link carries only a one-time token, so remember where to go
   // afterwards. Unsafe values are dropped by rememberPostLoginPath.
@@ -73,7 +82,7 @@ export async function verifySignInCode(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.verifyOtp({
+  const { data, error } = await supabase.auth.verifyOtp({
     email: email.data,
     token: code.data,
     type: 'email',
@@ -81,6 +90,7 @@ export async function verifySignInCode(
   if (error) {
     return { status: 'error', message: verifyFailureMessage(error) }
   }
+  trackSignupIfNew(data.user, 'email')
 
   // Clear the destination remembered for the emailed link so it cannot linger
   // and steer a later sign-in. Both values are same-site paths by construction.

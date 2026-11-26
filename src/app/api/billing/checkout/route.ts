@@ -4,6 +4,7 @@ import { safeNextPath } from '@/lib/auth/redirects'
 import { BillingError, createCheckoutSession } from '@/lib/billing/checkout'
 import { isPurchasableId } from '@/lib/billing/items'
 import { ROUTES } from '@/lib/config/site'
+import { limitRequest } from '@/lib/rate-limit'
 
 const bodySchema = z
   .object({
@@ -17,6 +18,8 @@ const bodySchema = z
 export async function POST(request: Request) {
   const user = await apiUser()
   if (user instanceof Response) return user
+  const limited = await limitRequest('checkout', request, user.id)
+  if (limited) return limited
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return jsonError(400, 'invalid_request', 'Unknown plan or pack.')

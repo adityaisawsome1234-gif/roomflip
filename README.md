@@ -16,7 +16,7 @@ text in `supabase/templates/sign_in.html`.
 | 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done        |
 | 5   | Export Reel and square before/after image                     | Done        |
 | 6   | Stripe checkout, portal, webhooks, paywall                    | Done        |
-| 7   | Analytics, admin page, rate limits                            | Not started |
+| 7   | Analytics, admin page, rate limits                            | Done        |
 | 8   | Landing page, deployment                                      | Not started |
 
 ## Stack
@@ -245,6 +245,31 @@ docker run -d -p 12111:12111 stripe/stripe-mock
 Then set `STRIPE_API_BASE=http://localhost:12111`, a placeholder `STRIPE_SECRET_KEY` such as
 `sk_test_123`, any `STRIPE_WEBHOOK_SECRET`, and placeholder `STRIPE_PRICE_*` ids in `.env.local`.
 `STRIPE_API_BASE` is ignored in production builds.
+
+## Operations
+
+**Analytics.** Six events go to PostHog, all sent from the server so ad blockers cannot drop them
+and no third-party script runs in the app: `signup`, `render_started`, `render_completed`,
+`export_reel`, `paywall_view` (the browser reports this one through `/api/events`) and
+`purchase` (with the amount). Events carry the user id and never the email. Signups and purchases
+carry a stable event id, so a repeated delivery is counted once. Leave `POSTHOG_API_KEY` blank to
+turn analytics off.
+
+**Admin page.** `/admin`, for the emails in `ADMIN_EMAILS`. It shows revenue, model spend, gross
+margin, renders, users and active plans for the last 7, 30 or 90 days; cost per render for each
+model, measured from real renders next to the configured price; revenue by product; a searchable
+user list; and recent renders with their status, attempts, cost and time. Model spend counts every
+submission to the provider, including renders that failed and were refunded.
+
+**Rate limits.** Per user and per IP, set in `src/lib/config/limits.ts`: uploads, renders,
+exports, checkout, sign-in emails (also per address) and browser events. Over the limit, the API
+answers 429 with `Retry-After`. Counters live in Postgres and store hashed IPs and emails, never
+plain ones. Local development does not limit loopback per IP; `RATE_LIMIT_EXEMPT_IPS` does the
+same for a production build tested locally.
+
+**Moderation.** Every room photo and sample is checked with OpenAI's free moderation endpoint
+before it is stored, and so is every free-text style before it reaches a model. Without
+`OPENAI_API_KEY`, production refuses uploads instead of skipping the check.
 
 ## Credits
 

@@ -28,6 +28,18 @@ const MODEL = 'omni-moderation-latest'
 /** The check does not need full resolution, and a smaller image is faster to send. */
 const CHECK_EDGE_PX = 768
 
+/** Check a short piece of user text (a free-text style). Same key rules as images. */
+export async function moderateText(text: string): Promise<ModerationResult> {
+  const apiKey = optionalServerEnv('OPENAI_API_KEY')
+  if (!apiKey) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new ModerationUnavailableError('OPENAI_API_KEY is not set')
+    }
+    return { outcome: 'skipped' }
+  }
+  return callModeration(apiKey, JSON.stringify({ model: MODEL, input: text.slice(0, 2000) }))
+}
+
 export async function moderateImage(jpeg: Buffer): Promise<ModerationResult> {
   const apiKey = optionalServerEnv('OPENAI_API_KEY')
   if (!apiKey) {
@@ -57,6 +69,10 @@ export async function moderateImage(jpeg: Buffer): Promise<ModerationResult> {
     ],
   })
 
+  return callModeration(apiKey, body)
+}
+
+async function callModeration(apiKey: string, body: string): Promise<ModerationResult> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await fetch(ENDPOINT, {

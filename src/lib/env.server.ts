@@ -28,12 +28,15 @@ export const SERVER_ENV_KEYS = [
   'STRIPE_PRICE_PACK_60',
   // Test only: point the Stripe client at stripe-mock (http://localhost:12111).
   'STRIPE_API_BASE',
-  // Analytics (PostHog), server-side capture
+  // Analytics (PostHog), sent from the server
   'POSTHOG_API_KEY',
+  'POSTHOG_HOST',
   // Admin page allowlist: comma-separated emails
   'ADMIN_EMAILS',
   // Shared secret for scheduled job endpoints
   'CRON_SECRET',
+  // IPs exempt from per-IP rate limits (comma-separated). Leave blank in production.
+  'RATE_LIMIT_EXEMPT_IPS',
 ] as const
 
 export type ServerEnvKey = (typeof SERVER_ENV_KEYS)[number]

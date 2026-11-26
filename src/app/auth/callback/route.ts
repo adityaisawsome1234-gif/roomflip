@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { safeNextPath } from '@/lib/auth/redirects'
+import { trackSignupIfNew } from '@/lib/auth/signup-event'
 import { ROUTES } from '@/lib/config/site'
 import { createClient } from '@/lib/supabase/server'
 
@@ -15,8 +16,9 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      trackSignupIfNew(data.user, 'google')
       return NextResponse.redirect(new URL(next, origin))
     }
   }

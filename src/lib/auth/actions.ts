@@ -5,6 +5,7 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { ROUTES } from '@/lib/config/site'
 import { consumePostLoginPath } from './post-login'
+import { trackSignupIfNew } from './signup-event'
 
 /** Token types an emailed sign-in link may carry. */
 const EMAIL_LINK_TYPES: readonly EmailOtpType[] = ['email', 'magiclink', 'signup']
@@ -29,13 +30,14 @@ export async function confirmEmailLink(formData: FormData): Promise<never> {
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.verifyOtp({
+  const { data, error } = await supabase.auth.verifyOtp({
     token_hash: tokenHash,
     type: type as EmailOtpType,
   })
   if (error) {
     redirect(`${ROUTES.login}?error=link_expired`)
   }
+  trackSignupIfNew(data.user, 'email')
 
   redirect(await consumePostLoginPath())
 }

@@ -237,6 +237,25 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          hits: number
+          key: string
+          window_start: string
+        }
+        ComputedFields: never
+        Insert: {
+          hits?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          hits?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       renders: {
         Row: {
           attempts: number
@@ -548,6 +567,58 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_model_costs: {
+        Args: { p_since: string }
+        Returns: {
+          avg_cost_usd: number
+          avg_seconds: number
+          failed: number
+          model: string
+          renders: number
+          spend_usd: number
+          submissions: number
+          succeeded: number
+          tier: string
+        }[]
+      }
+      admin_overview: { Args: { p_since: string }; Returns: Json }
+      admin_recent_renders: {
+        Args: { p_limit: number }
+        Returns: {
+          attempts: number
+          cost_usd: number
+          created_at: string
+          email: string
+          error_code: string
+          id: string
+          mode: string
+          model: string
+          seconds: number
+          status: string
+          tier: string
+        }[]
+      }
+      admin_revenue: {
+        Args: { p_since: string }
+        Returns: {
+          amount_cents: number
+          item_id: string
+          kind: string
+          payments: number
+        }[]
+      }
+      admin_users: {
+        Args: { p_limit: number; p_search: string }
+        Returns: {
+          balance: number
+          created_at: string
+          email: string
+          id: string
+          plan: string
+          renders: number
+          revenue_cents: number
+        }[]
+      }
       claim_render_check: {
         Args: { p_interval_ms: number; p_render_id: string; p_request_id: string }
         Returns: boolean
@@ -632,6 +703,15 @@ export type Database = {
       mark_render_submitted: {
         Args: { p_provider_endpoint: string; p_provider_request_id: string; p_render_id: string }
         Returns: boolean
+      }
+      rate_limit_cleanup: { Args: Record<PropertyKey, never>; Returns: number }
+      rate_limit_hit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          hits: number
+          retry_after: number
+        }[]
       }
       start_render: {
         Args: {

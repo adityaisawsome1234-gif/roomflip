@@ -38,6 +38,17 @@ export function Paywall({
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
 
+  // Count each time the paywall is shown.
+  useEffect(() => {
+    if (!open) return
+    void fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'paywall_view', properties: { reason } }),
+      keepalive: true,
+    }).catch(() => {})
+  }, [open, reason])
+
   useEffect(() => {
     if (!open) return
     heading.current?.focus()

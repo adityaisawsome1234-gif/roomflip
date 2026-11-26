@@ -1,8 +1,10 @@
 import { after } from 'next/server'
+import { trackLater } from '@/lib/analytics'
 import { apiUser, json, jsonError } from '@/lib/api'
 import { failStaleRenders } from '@/lib/credits/ledger'
 import { RenderError, requestRender } from '@/lib/render/jobs'
 import { renderRequestSchema } from '@/lib/render/request'
+import { limitRequest } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
@@ -15,6 +17,8 @@ export const maxDuration = 60
 export async function POST(request: Request) {
   const user = await apiUser()
   if (user instanceof Response) return user
+  const limited = await limitRequest('render', request, user.id)
+  if (limited) return limited
 
   let body: unknown
   try {
@@ -38,6 +42,14 @@ export async function POST(request: Request) {
 
   try {
     const result = await requestRender(user.id, parsed.data)
+    if (result.created) {
+      trackLater('render_started', user.id, {
+        render_id: result.renderId,
+        tier: parsed.data.tier,
+        mode: parsed.data.tier === 'preview' ? parsed.data.choice.mode : null,
+        credits_left: result.balance,
+      })
+    }
     return json(result, result.created ? 202 : 200)
   } catch (error) {
     if (error instanceof RenderError) return jsonError(error.status, error.code, error.message)
