@@ -38,7 +38,11 @@ const nextConfig: NextConfig = {
   // no system fonts). Files read at runtime are not traced automatically, so include them.
   outputFileTracingIncludes: {
     '/*': ['./assets/fonts/**/*'],
+    // The reel is encoded by a bundled ffmpeg binary; only the export route carries it.
+    '/api/renders/[id]/export': ['./node_modules/ffmpeg-static/ffmpeg'],
   },
+  // Loaded from node_modules at runtime so it can find its binary next to it.
+  serverExternalPackages: ['ffmpeg-static'],
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

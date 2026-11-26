@@ -48,6 +48,64 @@ export type Database = {
           },
         ]
       }
+      exports: {
+        Row: {
+          bytes: number
+          created_at: string
+          duration_ms: number | null
+          height: number
+          id: string
+          kind: string
+          path: string
+          render_id: string
+          user_id: string
+          variant: string
+          width: number
+        }
+        ComputedFields: never
+        Insert: {
+          bytes: number
+          created_at?: string
+          duration_ms?: number | null
+          height: number
+          id?: string
+          kind: string
+          path: string
+          render_id: string
+          user_id: string
+          variant: string
+          width: number
+        }
+        Update: {
+          bytes?: number
+          created_at?: string
+          duration_ms?: number | null
+          height?: number
+          id?: string
+          kind?: string
+          path?: string
+          render_id?: string
+          user_id?: string
+          variant?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'exports_render_id_fkey'
+            columns: ['render_id']
+            isOneToOne: false
+            referencedRelation: 'renders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'exports_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       paint_colors: {
         Row: {
           brand: string

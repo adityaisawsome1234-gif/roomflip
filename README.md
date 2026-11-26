@@ -14,7 +14,7 @@ text in `supabase/templates/sign_in.html`.
 | 2   | Credits ledger                                                | Done        |
 | 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done        |
 | 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done        |
-| 5   | Export Reel and square before/after image                     | Not started |
+| 5   | Export Reel and square before/after image                     | Done        |
 | 6   | Stripe checkout, portal, webhooks, paywall                    | Not started |
 | 7   | Analytics, admin page, rate limits                            | Not started |
 | 8   | Landing page, deployment                                      | Not started |
@@ -169,6 +169,29 @@ the webhook does the work and polling is the fallback.
 The sweeper runs daily because that is the most Vercel's free plan allows. On Vercel Pro, change
 the schedule in `vercel.json` to `*/5 * * * *`. Expired jobs are also refunded whenever anyone
 starts a render or checks on one, so the daily run is only a backstop.
+
+## Exports
+
+From a finished look, the result screen offers two shareable files, made on the server
+(`src/lib/export/`) and stored in the private `exports` bucket:
+
+- **Video reel:** 9:16 MP4, 7.8 seconds, H.264 with a silent AAC track. The before photo, a wipe
+  to the after photo, then an end card reading "Made with RoomFlip". The headline names the room,
+  the new look and the real time the render took ("My living room → Japandi, in 14 seconds"); the
+  time is left out when it took a minute or more. Free users get 720×1280 with a small mark;
+  paid users get 1080×1920 without it. Text stays clear of the areas TikTok and Reels cover with
+  their own controls.
+- **Square image:** before above after, 1024px with a small mark for free users, 1080px clean for
+  paid users.
+
+Each file is made once per render and plan type, then reused. On phones the Share button opens
+the system share sheet with the file attached, so it goes straight into TikTok, Instagram or
+Messages; elsewhere it downloads. There is no third-party branding in either file.
+
+Frames are composed with `sharp` using the bundled Geist font, and joined by the `ffmpeg` binary
+from the `ffmpeg-static` package. That binary is GPL-licensed; it runs only on our server and is
+never distributed to users. `next.config.ts` includes it in the export route's bundle only, so
+the other functions stay small. Set `FFMPEG_PATH` to use a different ffmpeg.
 
 ## Credits
 

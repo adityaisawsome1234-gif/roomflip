@@ -10,6 +10,7 @@ import { renderFailureMessage } from '@/lib/render/errors'
 import type { RenderView } from '@/lib/render/jobs'
 import type { RestyleChoice } from '@/lib/render/request'
 import { BeforeAfterSlider } from './before-after-slider'
+import { ExportPanel } from './export-panel'
 import { OutOfCredits } from './out-of-credits'
 import { startRender } from './start-render'
 
@@ -228,6 +229,7 @@ export function RenderResult({
                   : `Regenerate · ${CREDITS.cost.preview} render`}
             </Button>
           )}
+          {render.status === 'succeeded' && <ExportPanel renderId={render.id} />}
           <Link
             href={`/app/room/${render.roomId}`}
             className={buttonClasses({ variant: 'ghost', size: 'lg', fullWidth: true })}
