@@ -11,7 +11,7 @@ text in `supabase/templates/sign_in.html`.
 | #   | Milestone                                                     | Status      |
 | --- | ------------------------------------------------------------- | ----------- |
 | 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done        |
-| 2   | Credits ledger                                                | Not started |
+| 2   | Credits ledger                                                | Done        |
 | 3   | Upload pipeline, model providers, prompt builder, async jobs  | Not started |
 | 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Not started |
 | 5   | Export Reel and square before/after image                     | Not started |
@@ -124,6 +124,27 @@ numbers.
 
 `.env.example` lists every environment variable, grouped by the service it belongs to. A unit test
 fails if the code reads a server variable that the file does not document.
+
+## Credits
+
+Credits are never stored as a balance. Every change is one row in `credit_ledger` (signup grant,
+plan grant, pack purchase, render debit, refund, expiry), and a balance is always the sum of a
+user's rows. The rules live in Postgres functions in
+`supabase/migrations/20261126000100_credits_ledger.sql`, and app code reaches them only through
+`src/lib/credits/ledger.ts`.
+
+- **Starting a render** creates the job and takes its credits in one transaction, under a per-user
+  lock, so parallel requests cannot spend the same credit twice. A double tap is charged once.
+- **A failed or timed-out render** is refunded exactly once, to the bucket the credit came from. A
+  result that arrives after the timeout is discarded rather than delivered free.
+- **Buckets:** plan credits are spent first (they expire), then free, then purchased. Plan credits
+  do not roll over: the remainder is written off when the next grant arrives or the plan ends.
+- **Every grant is idempotent:** a replayed Stripe event cannot grant twice.
+- The ledger is append-only. Browsers cannot read it or call its functions, and even the service
+  role can only read it directly.
+
+`tests/db/credits.test.ts` covers all of this, including a test that holds one spend open in a
+transaction and proves the next one waits and is refused.
 
 ## Security model
 

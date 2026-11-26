@@ -3,6 +3,51 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      credit_ledger: {
+        Row: {
+          amount: number
+          bucket: string
+          created_at: string
+          id: number
+          idempotency_key: string
+          kind: string
+          metadata: NonNullable<Json>
+          render_id: string | null
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          amount: number
+          bucket: string
+          created_at?: string
+          id?: never
+          idempotency_key: string
+          kind: string
+          metadata?: NonNullable<Json>
+          render_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bucket?: string
+          created_at?: string
+          id?: never
+          idempotency_key?: string
+          kind?: string
+          metadata?: NonNullable<Json>
+          render_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'credit_ledger_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       paint_colors: {
         Row: {
           brand: string
@@ -71,6 +116,7 @@ export type Database = {
       renders: {
         Row: {
           attempts: number
+          client_request_id: string | null
           completed_at: string | null
           cost_usd: number | null
           created_at: string
@@ -101,6 +147,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           attempts?: number
+          client_request_id?: string | null
           completed_at?: string | null
           cost_usd?: number | null
           created_at?: string
@@ -130,6 +177,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          client_request_id?: string | null
           completed_at?: string | null
           cost_usd?: number | null
           created_at?: string
@@ -237,7 +285,95 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      complete_render: {
+        Args: {
+          p_render_id: string
+          p_result_height: number
+          p_result_path: string
+          p_result_width: number
+          p_watermarked_path: string
+        }
+        Returns: boolean
+      }
+      credit_balances: {
+        Args: { p_user_id: string }
+        Returns: {
+          free: number
+          pack: number
+          subscription: number
+          total: number
+        }[]
+      }
+      credits_fail_render: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_only_if_past_deadline: boolean
+          p_render_id: string
+        }
+        Returns: {
+          balance: number
+          changed: boolean
+          refunded: number
+        }[]
+      }
+      credits_lock_user: { Args: { p_user_id: string }; Returns: undefined }
+      credits_summary: {
+        Args: { p_signup_grant: number; p_user_id: string }
+        Returns: {
+          free: number
+          pack: number
+          subscription: number
+          total: number
+        }[]
+      }
+      expire_credits: {
+        Args: { p_bucket: string; p_idempotency_key: string; p_reason?: string; p_user_id: string }
+        Returns: number
+      }
+      fail_render: {
+        Args: { p_error_code: string; p_error_message?: string; p_render_id: string }
+        Returns: {
+          balance: number
+          changed: boolean
+          refunded: number
+        }[]
+      }
+      fail_stale_renders: { Args: { p_limit?: number }; Returns: string[] }
+      grant_credits: {
+        Args: {
+          p_amount: number
+          p_bucket: string
+          p_idempotency_key: string
+          p_kind: string
+          p_metadata?: Json
+          p_reset_bucket?: boolean
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      start_render: {
+        Args: {
+          p_client_request_id?: string
+          p_cost_usd: number
+          p_credits: number
+          p_deadline_seconds: number
+          p_mode: string
+          p_model: string
+          p_params: Json
+          p_prompt: string
+          p_provider: string
+          p_room_id: string
+          p_source_render_id?: string
+          p_tier: string
+          p_user_id: string
+        }
+        Returns: {
+          balance: number
+          created: boolean
+          render_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
