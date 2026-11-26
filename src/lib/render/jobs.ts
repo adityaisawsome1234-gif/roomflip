@@ -541,6 +541,7 @@ export interface RenderView {
   status: 'queued' | 'processing' | 'succeeded' | 'failed'
   errorCode: string | null
   sourceRenderId: string | null
+  isSaved: boolean
   createdAt: string
   completedAt: string | null
   before: { url: string; width: number; height: number }
@@ -599,6 +600,7 @@ export async function getRenderView(userId: string, renderId: string): Promise<R
     status: render.status as RenderView['status'],
     errorCode: render.error_code,
     sourceRenderId: render.source_render_id,
+    isSaved: render.is_saved,
     createdAt: render.created_at,
     completedAt: render.completed_at,
     before: {

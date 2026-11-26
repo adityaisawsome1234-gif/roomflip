@@ -13,7 +13,7 @@ text in `supabase/templates/sign_in.html`.
 | 1   | Scaffold, schema, auth, PWA shell, paint catalog              | Done        |
 | 2   | Credits ledger                                                | Done        |
 | 3   | Upload pipeline, model providers, prompt builder, async jobs  | Done        |
-| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Not started |
+| 4   | Restyle UI (presets, paint, swatch), results slider, My Rooms | Done        |
 | 5   | Export Reel and square before/after image                     | Not started |
 | 6   | Stripe checkout, portal, webhooks, paywall                    | Not started |
 | 7   | Analytics, admin page, rate limits                            | Not started |

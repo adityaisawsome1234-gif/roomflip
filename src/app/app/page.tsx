@@ -1,14 +1,13 @@
 import type { Metadata } from 'next'
-import { Camera, ImagePlus, Upload } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Suspense } from 'react'
+import { PhotoPicker } from '@/components/restyle/photo-picker'
+import { getSessionUser } from '@/lib/auth/session'
+import { listRecentRooms } from '@/lib/rooms-data'
 
 export const metadata: Metadata = { title: 'Create' }
 
-/**
- * Create tab. The upload and restyle flow is built in milestones 3 and 4.
- * Until then this shows where it will start, with the two entry points
- * switched off. There is no file input yet on purpose.
- */
+/** Create tab: start from a new photo, or pick up a room from before. */
 export default function CreatePage() {
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -16,28 +15,39 @@ export default function CreatePage() {
         <h1 className="font-display text-4xl leading-tight tracking-tight">Restyle a room</h1>
         <p className="text-muted">Add a photo of your room, then pick a new look for it.</p>
       </div>
-
-      <section
-        aria-label="Add a photo"
-        className="border-muted/40 bg-surface rounded-card flex min-h-80 flex-1 flex-col items-center justify-center gap-6 border-2 border-dashed p-6 text-center"
-      >
-        <span className="bg-accent-soft text-accent flex size-16 items-center justify-center rounded-full">
-          <ImagePlus aria-hidden="true" className="size-7" />
-        </span>
-        <div className="flex w-full flex-col gap-3">
-          <Button variant="accent" size="lg" fullWidth disabled aria-describedby="upload-status">
-            <Camera aria-hidden="true" className="size-5" />
-            Take a photo
-          </Button>
-          <Button variant="secondary" size="lg" fullWidth disabled aria-describedby="upload-status">
-            <Upload aria-hidden="true" className="size-5" />
-            Upload a photo
-          </Button>
-        </div>
-        <p id="upload-status" className="text-muted text-sm">
-          Photo upload is coming in the next build.
-        </p>
-      </section>
+      <PhotoPicker />
+      <Suspense fallback={null}>
+        <RecentRooms />
+      </Suspense>
     </div>
+  )
+}
+
+async function RecentRooms() {
+  const user = await getSessionUser()
+  if (!user) return null
+  const rooms = await listRecentRooms(user.id, 6)
+  if (rooms.length === 0) return null
+
+  return (
+    <section aria-labelledby="recent-heading" className="flex flex-col gap-3">
+      <h2 id="recent-heading" className="text-sm font-semibold">
+        Or restyle a room from before
+      </h2>
+      <ul className="grid grid-cols-3 gap-2">
+        {rooms.map((room) => (
+          <li key={room.id}>
+            <Link
+              href={`/app/room/${room.id}`}
+              aria-label={`Restyle ${room.roomType?.toLowerCase() ?? 'room'} from ${new Date(room.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+              className="rounded-control bg-surface-sunken block aspect-square overflow-hidden"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL */}
+              <img src={room.photoUrl} alt="" className="h-full w-full object-cover" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

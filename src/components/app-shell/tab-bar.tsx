@@ -12,11 +12,20 @@ interface Tab {
   icon: LucideIcon
   /** Active only on exactly this path, not on the pages beneath it. */
   exact?: boolean
+  /** Other path prefixes that belong to this tab. */
+  also?: string[]
 }
 
 const TABS: Tab[] = [
   // Every signed-in page lives under /app, so Create must match exactly.
-  { href: ROUTES.app, label: 'Create', icon: Sparkles, exact: true },
+  // The restyle flow (a room's choices, a render's result) belongs to Create.
+  {
+    href: ROUTES.app,
+    label: 'Create',
+    icon: Sparkles,
+    exact: true,
+    also: ['/app/room/', '/app/render/'],
+  },
   { href: ROUTES.rooms, label: 'My rooms', icon: Images },
   { href: ROUTES.account, label: 'Account', icon: CircleUserRound },
 ]
@@ -24,6 +33,7 @@ const TABS: Tab[] = [
 function isActive(tab: Tab, pathname: string | null): boolean {
   if (!pathname) return false
   if (pathname === tab.href) return true
+  if (tab.also?.some((prefix) => pathname.startsWith(prefix))) return true
   return !tab.exact && pathname.startsWith(`${tab.href}/`)
 }
 
